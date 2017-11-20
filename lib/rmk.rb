@@ -3,19 +3,26 @@ require 'rmk/version'
 class Rmk
 end
 
+class Rmk::Dir
+
+end
+
 def Rmk.parse(srcroot, tgtroot = Dir.pwd)
 end
 
 def Rmk.parse_line(line, lid)
-	case line
-	when /^rule/
-	when /^buildeach/
-	when /^build/
-	when /^default/
-	when /^include/
+	case
+	when line.sub! /^rule\s+/, ''
+	when line.sub! /^buildeach\s+/, ''
+	when line.sub! /^build\s+/, ''
+	when line.sub! /^default\s+/, ''
+	when line.sub! /^include\s+/, ''
+	when line =~ /^\s*$/
+		back_to_mainobj
 	else
-		match = /^(\s*)(\w+)\s+=\s*.*$/
-		raise "#{lid} : Óï·¨´íÎó"
+		match = /^(?<indent>\s*)(?<name>\w+)\s*=\s*(?<value>.*)$/.match line
+		raise "#{lid} : Óï·¨´íÎó" unless match
+		define_var match[:name], match[:value], match[:indent].empty?
 	end
 end
 
