@@ -11,13 +11,15 @@ def Rmk.parse(srcroot, tgtroot = Dir.pwd)
 end
 
 def Rmk.parse_line(line, lid)
-	case
-	when line.sub! /^rule\s+/, ''
-	when line.sub! /^buildeach\s+/, ''
-	when line.sub! /^build\s+/, ''
-	when line.sub! /^default\s+/, ''
-	when line.sub! /^include\s+/, ''
-	when line =~ /^\s*$/
+	case line
+	when /^(?<indent>\s*)rule\s+(?<name>.*)$/
+		raise "#{lid}: rule name invalid" unless Regexp.last_match(:name) =~ /^(?<name>\w+)\s*$/
+		rule_def_begin
+	when /^buildeach\s+/
+	when /^build\s+/
+	when /^default\s+/
+	when /^include\s+/
+	when /^\s*$/
 		back_to_mainobj
 	else
 		match = /^(?<indent>\s*)(?<name>\w+)\s*=\s*(?<value>.*)$/.match line
@@ -29,13 +31,14 @@ end
 def Rmk.parse_file(file)
 	lines = IO.readlines file
 	lid = 0
-	regex = /(?<!\$)\$$/
 	while lid < lines.size
 		line, markid = '', lid
-		while lines[lid].sub! regex, ''
+		lines[lid].sub! /(?<!\$)\#.*$/
+		while lines[lid].sub! /(?<!\$)\$$/, ''
 			line += lines[lid]
 			lid += 1
 			break unless lid < lines.size
+			lines[lid].sub! /^\s*/, ''
 		end
 		parse_line line + (lines[lid] || ''), markid
 	end
