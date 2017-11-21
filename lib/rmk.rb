@@ -4,27 +4,39 @@ class Rmk
 end
 
 class Rmk::Dir
+	attr_accessor :path
+	attr_accessor :srcfiles, :outfiles
 
+	def initialize(path = nil)
+		@path = path
+		srcfiles, outfiles = [], []
+	end
+end
+
+class Rmk::File
+	attr_reader :dir
 end
 
 def Rmk.parse(srcroot, tgtroot = Dir.pwd)
 end
 
 def Rmk.parse_line(line, lid)
-	case line
-	when /^(?<indent>\s*)rule\s+(?<name>.*)$/
-		raise "#{lid}: rule name invalid" unless Regexp.last_match(:name) =~ /^(?<name>\w+)\s*$/
-		rule_def_begin
-	when /^buildeach\s+/
-	when /^build\s+/
-	when /^default\s+/
-	when /^include\s+/
-	when /^\s*$/
-		back_to_mainobj
+	line =~ /^(?<indent>\s*)(?<firstword>\w+)?(?<content>.*)$/
+	indent, firstword, line = Regexp.last_match(:indent), Regexp.last_match(:firstword), Regexp.last_match(:content)
+	return end_last_define unless firstword
+	case firstword
+	when 'rule'
+		raise "#{lid}: rule name invalid" unless line =~ /^\s+(?<name>\w+)\s*$/
+		define_rule Regexp.last_match(:name), indent
+	when 'buildeach'
+	when 'build'
+	when 'default'
+	when 'include'
+		dirs = Dir["#{curdir}/#{}"]
 	else
-		match = /^(?<indent>\s*)(?<name>\w+)\s*=\s*(?<value>.*)$/.match line
+		match = /^\s*=\s*(?<value>.*)$/.match line
 		raise "#{lid} : ”Ô∑®¥ÌŒÛ" unless match
-		define_var match[:name], match[:value], match[:indent].empty?
+		define_var firstword, match[:value], indent
 	end
 end
 
