@@ -3,14 +3,25 @@ require 'rmk/version'
 class Rmk
 end
 
+class Rmk::Rule
+	attr_accessor :vars
+	def initialize
+		vars = {}
+	end
+end
+
 class Rmk::Dir
 	attr_accessor :path
 	attr_accessor :srcfiles, :outfiles
+	attr_accessor :vars, :rules, :subdirs
 
 	def initialize(path = nil)
 		@path = path
-		srcfiles, outfiles = [], []
+		@vars, @rules, @subdirs = {}, {}, {}
+		@srcfiles, @outfiles = [], []
 	end
+
+	def add_subdir(path) @subdirs[path] = Rmk::Dir.new path end
 end
 
 class Rmk::File
