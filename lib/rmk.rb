@@ -67,8 +67,8 @@ class Rmk::Dir
 	end
 
 	def parse_line(line, lid)
-		line =~ /^(?<indent>\s*)(?<firstword>\w+)?(?<content>.*)$/
-		indent, firstword, line = Regexp.last_match(:indent), Regexp.last_match(:firstword), Regexp.last_match(:content)
+		match = /^(?<indent>\s*)(?:(?<firstword>\w+)(?:\s*|\s+(?<content>.*)))?$/.match line
+		indent, firstword, line = match[:indent], match[:firstword], match[:content]
 		return end_last_define unless firstword
 		case firstword
 		when 'rule'
@@ -78,7 +78,18 @@ class Rmk::Dir
 		when 'build'
 		when 'default'
 		when 'include'
-			dirs = Dir["#{curdir}/#{}"]
+		when 'incdir'
+			dirs = line.gsub /\$(?:[\$ ]|{\w+})/ do |match|
+				case match
+				when '$ ' then ?\0
+				when '$$' then '$'
+				else /\${(?<name>)}/
+					@vars[Regexp.last_match :name]
+				end
+			end
+			dirs.gsub! /\s/, ?\n
+			dirs.gsub! ?\0, ' '
+			dirs = dirs.split /\n+/
 		else
 			match = /^\s*=\s*(?<value>.*)$/.match line
 			raise "#{lid} : ”Ô∑®¥ÌŒÛ" unless match
