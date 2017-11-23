@@ -65,14 +65,13 @@ class Rmk::Dir
 		lid = 0
 		while lid < lines.size
 			line, markid = '', lid
-			lines[lid].sub! /(?<!\$)\#.*$/
-			while lines[lid].sub! /(?<!\$)\$$/, ''
+			while lid < lines.size
+				break if lines[lid].sub!(/(?<!\$)((?:\$\$)*)#.*$/){$1}
+				break unless lines[lid].sub!(/(?<!\$)((?:\$\$)*)\$\n/m){$1}
 				line += lines[lid]
 				lid += 1
-				break unless lid < lines.size
-				lines[lid].sub! /^\s*/, ''
 			end
-			parse_line line + (lines[lid] || ''), markid
+			parse_line lid < lines.size ? line + lines[lid] : line, markid
 		end
 	end
 
