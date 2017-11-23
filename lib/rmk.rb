@@ -93,12 +93,11 @@ class Rmk::Dir
 				case match
 				when '$ ' then ?\0
 				when '$$' then '$'
-				else /\${(?<name>)}/
-					@vars[Regexp.last_match :name]
+				when /\${(?<name>\w+)}/ then @vars[Regexp.last_match :name]
 				end
 			end
 			dirs.gsub! /\s/, ?\n
-			dirs.gsub! ?\0, ' '
+			dirs.gsub! ?\0, ' '		# restore space
 			dirs = dirs.split /\n+/
 			raise "#{lid}; must have dir name or matcher" if dirs.empty?
 			dirs.each do |dir|
