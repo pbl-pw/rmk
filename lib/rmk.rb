@@ -102,6 +102,11 @@ class Rmk::Dir
 		when 'build'
 		when 'default'
 		when 'include'
+			parms = Rmk.split_parms preprocess_str line
+			raise "#{lid}: must have file name" if parms.empty?
+			parms.each do |parm|
+
+			end
 		when 'incdir'
 			parms = Rmk.split_parms preprocess_str line
 			raise "#{lid}; must have dir name or matcher" if parms.empty?
