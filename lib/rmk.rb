@@ -3,6 +3,17 @@ require 'rmk/version'
 class Rmk
 	def self.normalize_path(path) path.gsub(?\\, ?/).sub(/^[a-z](?=:)/){|ch|ch.upcase} end
 
+	# split parms using un-escape space as separator
+	def self.split_parms(line)
+		result = []
+		until line.empty?
+			head, match, line = line.partition /(?<!\$)((?:\$\$)*)\s+/
+			break result << head if match.empty?
+			result << head + $1 unless head.empty? && $1.empty?
+		end
+		result
+	end
+
 	def initialize(srcroot, outroot)
 		@rootdir = Rmk::Dir.new Rmk.normalize_path(srcroot), Rmk.normalize_path(outroot)
 		::Dir.mkdir outroot unless Dir.exist? outroot
@@ -40,6 +51,8 @@ class Rmk::Dir
 		dir.defaultfile = @defaultfile
 		dir
 	end
+
+	def unescape_str(str) str.gsub(/\$(?:([\$\s])|(\w+))/) {$1 || @vars[$2].to_s} end
 
 	def join_src_path(file) ::File.join @full_src_path, file end
 
@@ -88,30 +101,22 @@ class Rmk::Dir
 		when 'default'
 		when 'include'
 		when 'incdir'
-			dirs = line.gsub /\$(?:[\$ ]|{\w+})/ do |match|
-				case match
-				when '$ ' then ?\0
-				when '$$' then '$'
-				when /\${(?<name>\w+)}/ then @vars[Regexp.last_match :name]
-				end
-			end
-			dirs.gsub! /\s/, ?\n
-			dirs.gsub! ?\0, ' '		# restore space
-			dirs = dirs.split /\n+/
-			raise "#{lid}; must have dir name or matcher" if dirs.empty?
-			dirs.each do |dir|
-				subs = ::Dir[::File.join @full_src_path, dir, '']
-				raise "#{lid}: subdir '#{dir}' doesn't exist" if subs.empty?
-				subs.each do |dir|
+			parms = Rmk.split_parms line.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{@vars[$2]}"}
+			raise "#{lid}; must have dir name or matcher" if parms.empty?
+			parms.each do |parm|
+				parm = unescape_str parm
+				dirs = ::Dir[::File.join @full_src_path, parm, '']
+				raise "#{lid}: subdir '#{parm}' doesn't exist" if dirs.empty?
+				dirs.each do |dir|
 					dir = dir.sub @full_src_path, ''
-					new_thread {add_subdir dir}
+					new_thread {add_subdir(dir).parse}
 				end
 			end
 			join_threads
 		else
 			match = /^\s*=\s*(?<value>.*)$/.match line
 			raise "#{lid} : Óï·¨´íÎó" unless match
-			define_var firstword, match[:value], indent
+			@vars[firstword] = unescape_str match[:value]
 		end
 	end
 
