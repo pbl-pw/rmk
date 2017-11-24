@@ -105,7 +105,16 @@ class Rmk::Dir
 			parms = Rmk.split_parms preprocess_str line
 			raise "#{lid}: must have file name" if parms.empty?
 			parms.each do |parm|
-
+				if parm.match? /^[a-zA-Z]:/
+					raise "file '#{parm}' not exist" unless ::File.exist? parm
+					parse_file parm
+				else
+					file = join_out_path parm
+					next parse_file file if ::File.exist? file
+					file = join_src_path parm
+					next parse_file file if ::File.exist? file
+					raise "file '#{parm}' not exist"
+				end
 			end
 		when 'incdir'
 			parms = Rmk.split_parms preprocess_str line
