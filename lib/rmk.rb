@@ -52,6 +52,8 @@ class Rmk::Dir
 		dir
 	end
 
+	def preprocess_str(str) str.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{@vars[$2]}"} end
+
 	def unescape_str(str) str.gsub(/\$(?:([\$\s])|(\w+))/) {$1 || @vars[$2].to_s} end
 
 	def join_src_path(file) ::File.join @full_src_path, file end
@@ -101,22 +103,22 @@ class Rmk::Dir
 		when 'default'
 		when 'include'
 		when 'incdir'
-			parms = Rmk.split_parms line.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{@vars[$2]}"}
+			parms = Rmk.split_parms preprocess_str line
 			raise "#{lid}; must have dir name or matcher" if parms.empty?
 			parms.each do |parm|
 				parm = unescape_str parm
 				dirs = ::Dir[::File.join @full_src_path, parm, '']
 				raise "#{lid}: subdir '#{parm}' doesn't exist" if dirs.empty?
 				dirs.each do |dir|
-					dir = dir.sub @full_src_path, ''
-					new_thread {add_subdir(dir).parse}
+					dir = add_subdir dir.sub @full_src_path, ''
+					new_thread {dir.parse}
 				end
 			end
 			join_threads
 		else
 			match = /^\s*=\s*(?<value>.*)$/.match line
 			raise "#{lid} : Óï·¨´íÎó" unless match
-			@vars[firstword] = unescape_str match[:value]
+			@vars[firstword] = unescape_str preprocess_str match[:value]
 		end
 	end
 
