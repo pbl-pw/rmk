@@ -47,6 +47,7 @@ class Rmk::Dir
 	end
 
 	def add_subdir(path)
+		return @subdirs[path] if @subdirs.include? path
 		dir = @subdirs[path] = Rmk::Dir.new @srcroot, @outroot, path
 		dir.defaultfile = @defaultfile
 		dir
@@ -60,7 +61,59 @@ class Rmk::Dir
 
 	def join_out_path(file) ::File.join @full_out_path, file end
 
+	private def begin_define_nonvar(indent)
+		last = @state[-1]
+		if !last[:subindent]			# general context
+			raise 'invalid indent' unless indent == last[:indent]
+		elsif last[:subindent] == :var	# rule or build context which can add var
+			@state.delete_at -1
+			last = @state[-1]
+			raise 'invalid indent' unless indent == last[:indent]
+		else					# just after condition context
+			raise 'invalid indent' unless indent > last[:indent]
+			@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
+			last = @state[-1]
+		end
+		last
+	end
+
+	private def end_last_define
+		last = @state[-1]
+		@state.delete_at -1 if last[:subindent] == :var
+	end
+
+	def define_var(indent, name, value)
+		last = @state[-1]
+		if !last[:subindent]			# general context
+			raise 'invalid indent' unless indent == last[:indent]
+		elsif last[:subindent] == :var	# rule or build context which can add var
+			raise 'invalid indent' if indent < last[:indent]
+			if indent > last[:indent]
+				@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
+				last = @state[-1]
+			else
+				@state.delete_at -1
+				last = @state[-1]
+				raise 'invalid indent' unless indent == last[:indent]
+			end
+		else					# just after condition context
+			raise 'invalid indent' unless indent > last[:indent]
+			@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
+			last = @state[-1]
+		end
+		last[:vars][name] = value
+	end
+
+	def define_rule(indent, name, command)
+		state = begin_define_nonvar indent
+		raise "rule '#{name}' has been defined" if @rules.include? name
+		rule = @rules[name] = {'$command'=>command}
+		@state << {indent:indent, subindent: :var, condition:state[:condition], vars:rule}
+	end
+
 	def parse
+		raise "dir '#{@full_src_path}' has been parsed" if @state
+		@state = []
 		file = join_src_path 'default.rmk'
 		@defaultfile = file if ::File.exist? file
 		file = join_out_path 'config.rmk'
@@ -76,6 +129,7 @@ class Rmk::Dir
 	end
 
 	def parse_file(file)
+		last_state, @state = @state, [{indent:0, subindent:nil, condition:nil, vars:@vars}]
 		lines = IO.readlines file
 		lid = 0
 		while lid < lines.size
@@ -88,16 +142,17 @@ class Rmk::Dir
 			end
 			parse_line lid < lines.size ? line + lines[lid] : line, markid
 		end
+		@state = last_state
 	end
 
 	def parse_line(line, lid)
 		match = /^(?<indent>\s*)(?:(?<firstword>\w+)(?:\s*|\s+(?<content>.*)))?$/.match line
-		indent, firstword, line = match[:indent], match[:firstword], match[:content]
+		indent, firstword, line = match[:indent].size, match[:firstword], match[:content]
 		return end_last_define unless firstword
 		case firstword
 		when 'rule'
-			raise "#{lid}: rule name invalid" unless line =~ /^\s+(?<name>\w+)\s*$/
-			define_rule Regexp.last_match(:name), indent
+			raise 'rule name or command invalid' unless line =~ /^\s+(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/
+			define_rule indent, Regexp.last_match(:name), Regexp.last_match(:command)
 		when 'buildeach'
 		when 'build'
 		when 'default'
@@ -132,7 +187,7 @@ class Rmk::Dir
 		else
 			match = /^\s*=\s*(?<value>.*)$/.match line
 			raise "#{lid} : ”Ô∑®¥ÌŒÛ" unless match
-			@vars[firstword] = unescape_str preprocess_str match[:value]
+			define_var indent, firstword,(unescape_str preprocess_str match[:value])
 		end
 	end
 
