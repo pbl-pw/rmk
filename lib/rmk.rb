@@ -66,7 +66,7 @@ class Rmk::Dir
 		if !last[:subindent]			# general context
 			raise 'invalid indent' unless indent == last[:indent]
 		elsif last[:subindent] == :var	# rule or build context which can add var
-			@state.delete_at -1
+			@state.pop
 			last = @state[-1]
 			raise 'invalid indent' unless indent == last[:indent]
 		else					# just after condition context
@@ -79,7 +79,7 @@ class Rmk::Dir
 
 	private def end_last_define
 		last = @state[-1]
-		@state.delete_at -1 if last[:subindent] == :var
+		@state.pop if last[:subindent] == :var
 	end
 
 	def define_var(indent, name, value)
@@ -92,7 +92,7 @@ class Rmk::Dir
 				@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
 				last = @state[-1]
 			else
-				@state.delete_at -1
+				@state.pop
 				last = @state[-1]
 				raise 'invalid indent' unless indent == last[:indent]
 			end
@@ -147,9 +147,58 @@ class Rmk::Dir
 
 	def parse_line(line, lid)
 		match = /^(?<indent>\s*)(?:(?<firstword>\w+)(?:\s*|\s+(?<content>.*)))?$/.match line
+		raise 'syntax error' unless match
 		indent, firstword, line = match[:indent].size, match[:firstword], match[:content]
 		return end_last_define unless firstword
+		state = @state[-1]
+		if !state[:condition].nil? && !state[:condition]
+			case firstword
+			when /^ifn?(?:eq|def)$/
+				raise 'invalid indent' unless indent > last[:indent]
+				@state << {indent:indent, subindent: :condition, condition:false, vars:last[:vars]}
+			when 'else'
+				raise 'syntax error' unless line.match? /^\s*$/
+				raise 'invalid indent' unless indent == last[:indent]
+				last[:condition] = true
+			when 'endif'
+				raise 'syntax error' unless line.match? /^\s*$/
+				raise 'invalid indent' unless indent == last[:indent]
+				@state.pop
+			end
+			return
+		end
 		case firstword
+		when /^if(n)?eq$/
+			value = false
+			state = begin_define_nonvar indent
+			@state << {indent:indent, subindent: :condition, condition:value, vars:state[:vars]}
+		when /^if(n)?def$/
+			value = false
+			state = begin_define_nonvar indent
+			@state << {indent:indent, subindent: :condition, condition:value, vars:state[:vars]}
+		when 'else'
+			raise 'syntax error' unless line.match? /^\s*$/
+			while state
+				raise 'not if condition' if state[:condition].nil?
+				if state[:subindent]&.== :condition
+					raise 'invalid indent' unless indent == state[:indent]
+					return state[:condition] = false
+				end
+				@state.pop
+				state = @state[-1]
+			end
+		when 'endif'
+			raise 'syntax error' unless line.match? /^\s*$/
+			while state
+				raise 'not if condition' if state[:condition].nil?
+				if state[:subindent]&.== :condition
+					raise 'invalid indent' unless indent == state[:indent]
+					return @state.pop
+				end
+				@state.pop
+				state = @state[-1]
+			end
+			raise 'not found match if'
 		when 'rule'
 			raise 'rule name or command invalid' unless line =~ /^\s+(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/
 			define_rule indent, Regexp.last_match(:name), Regexp.last_match(:command)
