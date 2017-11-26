@@ -104,13 +104,6 @@ class Rmk::Dir
 		last[:vars][name] = value
 	end
 
-	def define_rule(indent, name, command)
-		state = begin_define_nonvar indent
-		raise "rule '#{name}' has been defined" if @rules.include? name
-		rule = @rules[name] = {'$command'=>command}
-		@state << {indent:indent, subindent: :var, condition:state[:condition], vars:rule}
-	end
-
 	def parse
 		raise "dir '#{@full_src_path}' has been parsed" if @state
 		@state = []
@@ -201,7 +194,10 @@ class Rmk::Dir
 			raise 'not found match if'
 		when 'rule'
 			raise 'rule name or command invalid' unless line =~ /^\s+(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/
-			define_rule indent, Regexp.last_match(:name), Regexp.last_match(:command)
+			state = begin_define_nonvar indent
+			raise "rule '#{name}' has been defined" if @rules.include? name
+			rule = @rules[name] = {'$command'=>command}
+			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:rule}
 		when 'buildeach'
 		when 'build'
 		when 'default'
