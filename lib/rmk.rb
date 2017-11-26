@@ -162,12 +162,19 @@ class Rmk::Dir
 		end
 		case firstword
 		when /^if(n)?eq$/
-			value = false
+			value = Regexp.last_match(1)
+			parms = Rmk.split_parms preprocess_str line
+			raise 'must have two str' unless parms.size == 2
 			state = begin_define_nonvar indent
+			value = value ? parms[0] != parms[1] : parms[0] == parms[1]
 			@state << {indent:indent, subindent: :condition, condition:value, vars:state[:vars]}
 		when /^if(n)?def$/
-			value = false
+			value = Regexp.last_match(1)
+			parms = Rmk.split_parms preprocess_str line
+			raise 'must have var name' if parms.empty?
 			state = begin_define_nonvar indent
+			value = value ? parms.all{|parm| !@vars.include? unescape_str parm} :
+				parms.all{|parm| @vars.include? unescape_str parm}
 			@state << {indent:indent, subindent: :condition, condition:value, vars:state[:vars]}
 		when 'else'
 			raise 'syntax error' unless line.match? /^\s*$/
