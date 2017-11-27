@@ -4,10 +4,10 @@ class Rmk
 	def self.normalize_path(path) path.gsub(?\\, ?/).sub(/^[a-z](?=:)/){|ch|ch.upcase} end
 
 	# split parms using un-escape space as separator
-	def self.split_parms(line)
+	def self.split_parms(line, sep = '\s+')
 		result = []
 		until line.empty?
-			head, match, line = line.partition /(?<!\$)((?:\$\$)*)\s+/
+			head, match, line = line.partition /(?<!\$)((?:\$\$)*)#{sep}/
 			break result << head if match.empty?
 			result << head + $1 unless head.empty? && $1.empty?
 		end
@@ -15,7 +15,7 @@ class Rmk
 	end
 
 	def initialize(srcroot, outroot)
-		@rootdir = Rmk::Dir.new Rmk.normalize_path(srcroot), Rmk.normalize_path(outroot)
+		@rootdir = Rmk::Dir.new self, Rmk.normalize_path(srcroot), Rmk.normalize_path(outroot)
 		::Dir.mkdir outroot unless Dir.exist? outroot
 		@rootdir.parse
 	end
@@ -24,22 +24,23 @@ class Rmk
 	end
 end
 
-class Rmk::Rule
-	attr_accessor :vars
-	def initialize
-		vars = {}
+class Rmk::Build
+	attr_reader :dir, :input, :implicit_input, :order_only_input, :output, :implicit_output
+
+	def initialize(dir, input, implicit_input, order_only_input, output, implicit_output)
+		# placeholder
 	end
 end
 
 class Rmk::Dir
-	attr_reader :srcroot, :outroot, :path, :full_src_path, :full_out_path
+	attr_reader :rmk, :srcroot, :outroot, :path, :full_src_path, :full_out_path
 	attr_reader :srcfiles, :outfiles
 	attr_reader :vars, :rules, :subdirs
 	attr_writer :defaultfile
 	protected :defaultfile=
 
-	def initialize(srcroot, outroot, path = '')
-		@srcroot, @outroot, @path, @defaultfile = srcroot, outroot, path, nil
+	def initialize(rmk, srcroot, outroot, path = '')
+		@rmk, @srcroot, @outroot, @path, @defaultfile = rmk, srcroot, outroot, path, nil
 		@vars, @rules, @subdirs = {}, {}, {}
 		@srcfiles, @outfiles = [], []
 		@full_src_path = ::File.join @srcroot, @path, ''
@@ -48,7 +49,7 @@ class Rmk::Dir
 
 	def add_subdir(path)
 		return @subdirs[path] if @subdirs.include? path
-		dir = @subdirs[path] = Rmk::Dir.new @srcroot, @outroot, path
+		dir = @subdirs[path] = Rmk::Dir.new @rmk, @srcroot, @outroot, path
 		dir.defaultfile = @defaultfile
 		dir
 	end
@@ -207,6 +208,16 @@ class Rmk::Dir
 			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:rule}
 		when 'buildeach'
 		when 'build'
+			state = begin_define_nonvar indent
+			match = /^(?<rule>\w+)\s+(?<parms>.*)$/.match line
+			raise 'syntax error' unless match
+			raise "rule '#{match[:rule]}' undefined" unless @rules.include? match[:rule]
+			parms = Rmk.split_parms match[:parms], '>>'
+			raise "must have '>>' separator for separat input and output" unless parms.size == 2
+			iparms = Rmk.split_parms parms[0], '&'
+			raise 'input syntax error' unless (1..3) === iparms.size
+			oparms = Rmk.split_parms parms[1], '&'
+			raise 'output syntax error' unless (1..2) === oparms.size
 		when 'default'
 		when 'include'
 			parms = Rmk.split_parms preprocess_str line
