@@ -25,16 +25,24 @@ class Rmk
 end
 
 class Rmk::Build
-	attr_reader :dir, :input, :implicit_input, :order_only_input, :output, :implicit_output
+	attr_reader :dir, :rule
+	attr_reader :input, :implicit_input, :order_only_input, :output, :implicit_output
+	attr_reader :vars
 
-	def initialize(dir, input, implicit_input, order_only_input, output, implicit_output)
-		# placeholder
+	def initialize(dir, rule, input, implicit_input, order_only_input, output, implicit_output)
+		@dir = dir
+		@outfiles = []
+		regout = proc {|fn| @outfiles << dir.add_out_file(self, fn)}
+		output.each &regout
+		implicit_output.each &regout if implicit_output
 	end
+
+	def bind_vars(vars = {}) @vars = vars; self end
 end
 
 class Rmk::Dir
 	attr_reader :rmk, :srcroot, :outroot, :path, :full_src_path, :full_out_path
-	attr_reader :srcfiles, :outfiles
+	attr_reader :srcfiles, :outfiles, :builds
 	attr_reader :vars, :rules, :subdirs
 	attr_writer :defaultfile
 	protected :defaultfile=
@@ -42,12 +50,12 @@ class Rmk::Dir
 	def initialize(rmk, srcroot, outroot, path = '')
 		@rmk, @srcroot, @outroot, @path, @defaultfile = rmk, srcroot, outroot, path, nil
 		@vars, @rules, @subdirs = {}, {}, {}
-		@srcfiles, @outfiles = [], []
+		@srcfiles, @outfiles, @builds = {}, {}, []
 		@full_src_path = ::File.join @srcroot, @path, ''
 		@full_out_path = ::File.join @outroot, @path, ''
 	end
 
-	def add_subdir(path)
+	def include_subdir(path)
 		return @subdirs[path] if @subdirs.include? path
 		dir = @subdirs[path] = Rmk::Dir.new @rmk, @srcroot, @outroot, path
 		dir.defaultfile = @defaultfile
@@ -61,6 +69,14 @@ class Rmk::Dir
 	def join_src_path(file) ::File.join @full_src_path, file end
 
 	def join_out_path(file) ::File.join @full_out_path, file end
+
+	# add a output file
+	# @param name file name, must relative to this dir
+	def add_out_file(build, name)
+		name = unescape_str name
+		rpath = @path.empty? ? name : ::File.join(@path, name)
+		@outfiles[name] = {ibuild:build, path:rpath, state: :parsed}
+	end
 
 	private def begin_define_nonvar(indent)
 		last = @state[-1]
@@ -206,8 +222,8 @@ class Rmk::Dir
 			raise "rule '#{name}' has been defined" if @rules.include? name
 			rule = @rules[name] = {'$command'=>command}
 			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:rule}
-		when 'buildeach'
-		when 'build'
+		when /^build(each)?$/
+			eachmode = $1
 			state = begin_define_nonvar indent
 			match = /^(?<rule>\w+)\s+(?<parms>.*)$/.match line
 			raise 'syntax error' unless match
@@ -218,11 +234,20 @@ class Rmk::Dir
 			raise 'input syntax error' unless (1..3) === iparms.size
 			oparms = Rmk.split_parms parms[1], '&'
 			raise 'output syntax error' unless (1..2) === oparms.size
+			iparms.map!{|fns| Rmk.split_parms preprocess_str fns}
+			oparms.map!{|fns| Rmk.split_parms preprocess_str fns}
+			vars = {}
+			if eachmode
+			else
+				@builds << Rmk::Build.new(self, match[:rule], iparms[0], iparms[1], iparms[2], oparms[0], oparms[1]).bind_vars(vars)
+			end
+			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:vars}
 		when 'default'
 		when 'include'
 			parms = Rmk.split_parms preprocess_str line
 			raise "#{lid}: must have file name" if parms.empty?
 			parms.each do |parm|
+				parm = unescape_str parm
 				if parm.match? /^[a-zA-Z]:/
 					raise "file '#{parm}' not exist" unless ::File.exist? parm
 					parse_file parm
@@ -242,7 +267,7 @@ class Rmk::Dir
 				dirs = ::Dir[::File.join @full_src_path, parm, '']
 				raise "#{lid}: subdir '#{parm}' doesn't exist" if dirs.empty?
 				dirs.each do |dir|
-					dir = add_subdir dir.sub @full_src_path, ''
+					dir = include_subdir dir.sub @full_src_path, ''
 					new_thread {dir.parse}
 				end
 			end
