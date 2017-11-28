@@ -22,6 +22,19 @@ class Rmk
 
 	def build(*tgts)
 	end
+
+	class Vars; end
+	class Rule < Vars; end
+end
+
+class Rmk::Vars
+	# create vars
+	# @param upstream [#[]] upstream vars for lookup var which current obj not include
+	def initialize(upstream, **presets) @upstream, @vars = upstream, presets end
+
+	def [](name) (@vars.include?(name) ? @vars[name] : @upstream[name]).to_s end
+
+	def []=(name, value) @vars[name] = value end
 end
 
 class Rmk::Build
@@ -31,7 +44,7 @@ class Rmk::Build
 
 	# create Build
 	# @param dir [Rmk::Dir] Build's dir
-	# @param rule [Hash{String=>String}] Build's rule
+	# @param rule [Rmk::Rule] Build's rule
 	def initialize(dir, rule, input, implicit_input, order_only_input, output, implicit_output)
 		@dir, @rule = dir, rule
 		@infiles = []
@@ -52,12 +65,7 @@ class Rmk::Build
 
 	# get build variable value
 	# @return [String] if variable not exist, return empty string
-	def [](name)
-		return @vars[name] if @vars.include? name
-		return @rule[name] if @rule.include? name
-		return @dir.vars[name] if @dir.vars.include? name
-		''
-	end
+	def [](name) @vars.include?(name) ? @vars[name] : @rule[name] end
 
 	def []=(name, value) @vars[name] = value end
 
@@ -254,7 +262,7 @@ class Rmk::Dir
 			raise 'rule name or command invalid' unless line =~ /^\s+(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/
 			state = begin_define_nonvar indent
 			raise "rule '#{name}' has been defined" if @rules.include? name
-			rule = @rules[name] = {'$command'=>command}
+			rule = @rules[name] = Rmk::Rule.new @vars, '$command'=>command
 			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:rule}
 		when /^build(each)?$/
 			eachmode = $1
