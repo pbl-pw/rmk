@@ -31,12 +31,18 @@ end
 
 class Rmk::Vars
 	# create vars
-	# @param upstream [#[]] upstream vars for lookup var which current obj not include
+	# @param upstream [Rmk::Vars, nil] upstream vars for lookup var which current obj not include
 	def initialize(upstream, **presets) @upstream, @vars = upstream, presets end
 
-	def [](name) (@vars.include?(name) ? @vars[name] : @upstream[name]).to_s end
+	def [](name) (@vars.include?(name) ? @vars[name] : @upstream&.[](name)).to_s end
 
 	def []=(name, value) @vars[name] = value end
+
+	def include?(name) @vars.include?(name) || @upstream&.include?(name) end
+
+	def preprocess_str(str) str.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{self[$2]}"} end
+
+	def unescape_str(str) str.gsub(/\$(?:([\$\s>&])|(\w+))/){$1 || self[$2]} end
 end
 
 class Rmk::Build
@@ -85,7 +91,7 @@ class Rmk::Dir
 
 	def initialize(rmk, srcroot, outroot, path = '')
 		@rmk, @srcroot, @outroot, @path, @defaultfile = rmk, srcroot, outroot, path, nil
-		@vars, @rules, @subdirs = {}, {}, {}
+		@vars, @rules, @subdirs = Rmk::Vars.new(nil), {}, {}
 		@srcfiles, @outfiles, @builds = {}, {}, []
 		@full_src_path = ::File.join @srcroot, @path, ''
 		@full_out_path = ::File.join @outroot, @path, ''
@@ -97,10 +103,6 @@ class Rmk::Dir
 		dir.defaultfile = @defaultfile
 		dir
 	end
-
-	def preprocess_str(str) str.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{@vars[$2]}"} end
-
-	def unescape_str(str) str.gsub(/\$(?:([\$\s])|(\w+))/) {$1 || @vars[$2].to_s} end
 
 	def join_src_path(file) ::File.join @full_src_path, file end
 
@@ -216,18 +218,18 @@ class Rmk::Dir
 		case firstword
 		when /^if(n)?eq$/
 			value = Regexp.last_match(1)
-			parms = Rmk.split_parms preprocess_str line
-			raise 'must have two str' unless parms.size == 2
 			state = begin_define_nonvar indent
+			parms = Rmk.split_parms state[:vars].preprocess_str line
+			raise 'must have two str' unless parms.size == 2
 			value = value ? parms[0] != parms[1] : parms[0] == parms[1]
 			@state << {indent:indent, subindent: :condition, condition:value, vars:state[:vars]}
 		when /^if(n)?def$/
 			value = Regexp.last_match(1)
-			parms = Rmk.split_parms preprocess_str line
-			raise 'must have var name' if parms.empty?
 			state = begin_define_nonvar indent
-			value = value ? parms.all{|parm| !@vars.include? unescape_str parm} :
-				parms.all{|parm| @vars.include? unescape_str parm}
+			parms = Rmk.split_parms state[:vars].preprocess_str line
+			raise 'must have var name' if parms.empty?
+			value = value ? parms.all{|parm| !@vars.include? state[:vars].unescape_str parm} :
+				parms.all{|parm| @vars.include? state[:vars].unescape_str parm}
 			@state << {indent:indent, subindent: :condition, condition:value, vars:state[:vars]}
 		when 'else'
 			raise 'syntax error' unless line.match? /^\s*$/
@@ -270,8 +272,8 @@ class Rmk::Dir
 			raise 'input syntax error' unless (1..3) === iparms.size
 			oparms = Rmk.split_parms parms[1], '&'
 			raise 'output syntax error' unless (1..2) === oparms.size
-			iparms.map!{|fns| Rmk.split_parms preprocess_str fns}
-			oparms.map!{|fns| Rmk.split_parms preprocess_str fns}
+			iparms.map!{|fns| Rmk.split_parms state[:vars].preprocess_str fns}
+			oparms.map!{|fns| Rmk.split_parms state[:vars].preprocess_str fns}
 			if eachmode
 				vars = {}
 			else
@@ -281,10 +283,11 @@ class Rmk::Dir
 			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:vars}
 		when 'default'
 		when 'include'
-			parms = Rmk.split_parms preprocess_str line
+			state = begin_define_nonvar indent
+			parms = Rmk.split_parms state[:vars].preprocess_str line
 			raise "#{lid}: must have file name" if parms.empty?
 			parms.each do |parm|
-				parm = unescape_str parm
+				parm = state[:vars].unescape_str parm
 				if parm.match? /^[a-zA-Z]:/
 					raise "file '#{parm}' not exist" unless ::File.exist? parm
 					parse_file parm
@@ -297,10 +300,11 @@ class Rmk::Dir
 				end
 			end
 		when 'incdir'
-			parms = Rmk.split_parms preprocess_str line
+			state = begin_define_nonvar indent
+			parms = Rmk.split_parms state[:vars].preprocess_str line
 			raise "#{lid}; must have dir name or matcher" if parms.empty?
 			parms.each do |parm|
-				parm = unescape_str parm
+				parm = state[:vars].unescape_str parm
 				dirs = ::Dir[::File.join @full_src_path, parm, '']
 				raise "#{lid}: subdir '#{parm}' doesn't exist" if dirs.empty?
 				dirs.each do |dir|
@@ -312,7 +316,7 @@ class Rmk::Dir
 		else
 			match = /^\s*=\s*(?<value>.*)$/.match line
 			raise "#{lid} : ”Ô∑®¥ÌŒÛ" unless match
-			define_var indent, firstword,(unescape_str preprocess_str match[:value])
+			define_var indent, firstword,(state[:vars].unescape_str state[:vars].preprocess_str match[:value])
 		end
 	end
 
