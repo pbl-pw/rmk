@@ -29,15 +29,49 @@ class Rmk::Build
 	attr_reader :input, :implicit_input, :order_only_input, :output, :implicit_output
 	attr_reader :vars
 
+	# create Build
+	# @param dir [Rmk::Dir] Build's dir
+	# @param rule [Hash{String=>String}] Build's rule
 	def initialize(dir, rule, input, implicit_input, order_only_input, output, implicit_output)
-		@dir = dir
+		@dir, @rule = dir, rule
+		@infiles = []
+		regin = proc{|fn| @infiles << dir.reg_in_file(self, fn)}
+		input.each &regin
+		@vars['in'] = @infiles.map{|f| %|"#{f['path']}"|}.join ' '
+		implicit_input.each &regin if implicit_input
+		@orderfiles = []
+		order_only_input.each{|fn| @orderfiles << dir.reg_order_file(self, fn)} if order_only_input
 		@outfiles = []
 		regout = proc {|fn| @outfiles << dir.add_out_file(self, fn)}
 		output.each &regout
+		@vars['out'] = @outfiles.map{|f| %|"#{f['path']}"|}.join ' '
 		implicit_output.each &regout if implicit_output
 	end
 
 	def bind_vars(vars = {}) @vars = vars; self end
+
+	# get build variable value
+	# @return [String] if variable not exist, return empty string
+	def [](name)
+		return @vars[name] if @vars.include? name
+		return @rule[name] if @rule.include? name
+		return @dir.vars[name] if @dir.vars.include? name
+		''
+	end
+
+	def []=(name, value) @vars[name] = value end
+
+	def run
+		cmd = @rule['$command']
+		if cmd && !cmd.empty?
+			cmd = cmd.gsub(/\$(?:(\$)|(\w+)|{(\w+)})/){case when $1 then $1 when $2 then self[$2] else self[$3] end}
+		end
+		result = system cmd
+		@outfiles.each do |f|
+			f[:state] = :updated
+			f[:obuild].need_run! if f.include? :obuild
+		end if result
+	end
 end
 
 class Rmk::Dir
