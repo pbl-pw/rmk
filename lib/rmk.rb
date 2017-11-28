@@ -24,7 +24,9 @@ class Rmk
 	end
 
 	class Vars; end
-	class Rule < Vars; end
+	class Rule < Vars
+		def vars; self end
+	end
 end
 
 class Rmk::Vars
@@ -39,14 +41,14 @@ end
 
 class Rmk::Build
 	attr_reader :dir, :rule
-	attr_reader :input, :implicit_input, :order_only_input, :output, :implicit_output
+	attr_reader :infiles, :orderfiles, :outfiles
 	attr_reader :vars
 
 	# create Build
-	# @param dir [Rmk::Dir] Build's dir
-	# @param rule [Rmk::Rule] Build's rule
-	def initialize(dir, rule, input, implicit_input, order_only_input, output, implicit_output)
-		@dir, @rule = dir, rule
+	# @param dir [Rmk::Dir] build's dir
+	# @param vars [Rmk::Vars] build's upstream of share vars, when define 'buildeach' it's share vars, otherwise it's rule's vars
+	def initialize(dir, vars, input, implicit_input, order_only_input, output, implicit_output)
+		@dir, @vars = dir, Rmk::Vars.new(vars)
 		@infiles = []
 		regin = proc{|fn| @infiles << dir.reg_in_file(self, fn)}
 		input.each &regin
@@ -61,20 +63,12 @@ class Rmk::Build
 		implicit_output.each &regout if implicit_output
 	end
 
-	def bind_vars(vars = {}) @vars = vars; self end
-
-	# get build variable value
-	# @return [String] if variable not exist, return empty string
-	def [](name) @vars.include?(name) ? @vars[name] : @rule[name] end
-
-	def []=(name, value) @vars[name] = value end
-
 	def run
-		cmd = @rule['$command']
-		if cmd && !cmd.empty?
-			cmd = cmd.gsub(/\$(?:(\$)|(\w+)|{(\w+)})/){case when $1 then $1 when $2 then self[$2] else self[$3] end}
+		cmd = @vars['$command']
+		unless cmd.empty?
+			cmd = cmd.gsub(/\$(?:(\$)|(\w+)|{(\w+)})/){case when $1 then $1 when $2 then @vars[$2] else @vars[$3] end}
+			result = system cmd
 		end
-		result = system cmd
 		@outfiles.each do |f|
 			f[:state] = :updated
 			f[:obuild].need_run! if f.include? :obuild
@@ -278,10 +272,11 @@ class Rmk::Dir
 			raise 'output syntax error' unless (1..2) === oparms.size
 			iparms.map!{|fns| Rmk.split_parms preprocess_str fns}
 			oparms.map!{|fns| Rmk.split_parms preprocess_str fns}
-			vars = {}
 			if eachmode
+				vars = {}
 			else
 				@builds << Rmk::Build.new(self, match[:rule], iparms[0], iparms[1], iparms[2], oparms[0], oparms[1]).bind_vars(vars)
+				vars = @builds[-1].vars
 			end
 			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:vars}
 		when 'default'
