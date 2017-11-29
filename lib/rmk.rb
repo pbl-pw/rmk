@@ -40,13 +40,18 @@ class Rmk::Vars
 
 	def include?(name) @vars.include?(name) || @upstream&.include?(name) end
 
+	# only do #{\w+} interpolate
 	def preprocess_str(str) str.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{self[$2]}"} end
 
+	# do all '$' prefix escape str interpolate
 	def unescape_str(str) str.gsub(/\$(?:([\$\s>&])|(\w+))/){$1 || self[$2]} end
+
+	# preprocess str, and then unescape the result
+	def interpolate_str(str) unescape_str preprocess_str str end
 end
 
 class Rmk::Build
-	attr_reader :dir, :rule
+	attr_reader :dir
 	attr_reader :infiles, :orderfiles, :outfiles
 	attr_reader :vars
 
@@ -70,7 +75,7 @@ class Rmk::Build
 	end
 
 	def run
-		cmd = @vars['$command']
+		cmd = @vars['command']
 		unless cmd.empty?
 			cmd = cmd.gsub(/\$(?:(\$)|(\w+)|{(\w+)})/){case when $1 then $1 when $2 then @vars[$2] else @vars[$3] end}
 			result = system cmd
@@ -111,7 +116,7 @@ class Rmk::Dir
 	# add a output file
 	# @param name file name, must relative to this dir
 	def add_out_file(build, name)
-		name = unescape_str name
+		name = @vars.unescape_str name
 		rpath = @path.empty? ? name : ::File.join(@path, name)
 		@outfiles[name] = {ibuild:build, path:rpath, state: :parsed}
 	end
@@ -156,7 +161,7 @@ class Rmk::Dir
 			@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
 			last = @state[-1]
 		end
-		last[:vars][name] = value
+		last[:vars][name] = last[:vars].interpolate_str value
 	end
 
 	def parse
@@ -258,7 +263,7 @@ class Rmk::Dir
 			raise 'rule name or command invalid' unless line =~ /^\s+(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/
 			state = begin_define_nonvar indent
 			raise "rule '#{name}' has been defined" if @rules.include? name
-			rule = @rules[name] = Rmk::Rule.new @vars, '$command'=>command
+			rule = @rules[name] = Rmk::Rule.new @vars, 'command'=>command
 			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:rule}
 		when /^build(each)?$/
 			eachmode = $1
@@ -314,9 +319,9 @@ class Rmk::Dir
 			end
 			join_threads
 		else
-			match = /^\s*=\s*(?<value>.*)$/.match line
+			match = /^=\s*(?<value>.*)$/.match line
 			raise "#{lid} : Óï·¨´íÎó" unless match
-			define_var indent, firstword,(state[:vars].unescape_str state[:vars].preprocess_str match[:value])
+			define_var indent, firstword, match[:value]
 		end
 	end
 
