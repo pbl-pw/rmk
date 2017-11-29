@@ -123,16 +123,17 @@ class Rmk::Dir
 
 	private def begin_define_nonvar(indent)
 		last = @state[-1]
-		if !last[:subindent]			# general context
-			raise 'invalid indent' unless indent == last[:indent]
-		elsif last[:subindent] == :var	# rule or build context which can add var
+		case last[:subindent]
+		when :var		# rule or build context which can add var
 			@state.pop
 			last = @state[-1]
 			raise 'invalid indent' unless indent == last[:indent]
-		else					# just after condition context
+		when :condition	# just after condition context
 			raise 'invalid indent' unless indent > last[:indent]
 			@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
 			last = @state[-1]
+		else			# general context
+			raise 'invalid indent' unless indent == last[:indent]
 		end
 		last
 	end
@@ -144,9 +145,8 @@ class Rmk::Dir
 
 	def define_var(indent, name, value)
 		last = @state[-1]
-		if !last[:subindent]			# general context
-			raise 'invalid indent' unless indent == last[:indent]
-		elsif last[:subindent] == :var	# rule or build context which can add var
+		case last[:subindent]
+		when :var		# rule or build context which can add var
 			raise 'invalid indent' if indent < last[:indent]
 			if indent > last[:indent]
 				@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
@@ -156,10 +156,12 @@ class Rmk::Dir
 				last = @state[-1]
 				raise 'invalid indent' unless indent == last[:indent]
 			end
-		else					# just after condition context
+		when :condition	# just after condition context
 			raise 'invalid indent' unless indent > last[:indent]
 			@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
 			last = @state[-1]
+		else			# general context
+			raise 'invalid indent' unless indent == last[:indent]
 		end
 		last[:vars][name] = last[:vars].interpolate_str value
 	end
