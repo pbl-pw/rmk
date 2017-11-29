@@ -113,6 +113,19 @@ class Rmk::Dir
 
 	def join_out_path(file) ::File.join @full_out_path, file end
 
+	def find_inputfiles(pattern)
+		pattern = Rmk.normalize_path pattern
+		files = find_srcfiles pattern
+		return files if pattern.match? /^[a-z]:/i
+		files.concat find_outfiles(pattern)
+	end
+
+	def find_srcfiles(pattern)
+		return Dir[pattern] if pattern.match? /[a-z]:/i
+		pattern = join_src_path pattern
+		Dir[pattern].map!{|fn| fn.delete! @full_src_path}
+	end
+
 	# add a output file
 	# @param name file name, must relative to this dir
 	def add_out_file(build, name)
@@ -269,7 +282,8 @@ class Rmk::Dir
 			iparms[0] = Rmk.split_parms(state[:vars].preprocess_str iparms[0]).map!{|fn| state[:vars].unescape_str fn}
 			vars = Rmk::Vars.new @rules[match[:rule]].vars
 			if eachmode
-				find_inputfiles(*iparms[0]).each do |fn|
+				iparms[0].each do |fn|
+					files = find_inputfiles fn
 					nvars = Rmk::Vars.new vars
 					@builds << Rmk::Build.new(self, nvars, iparms[0], iparms[1], iparms[2], oparms[0], oparms[1])
 				end
