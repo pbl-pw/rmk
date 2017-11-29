@@ -57,9 +57,9 @@ class Rmk::Build
 
 	# create Build
 	# @param dir [Rmk::Dir] build's dir
-	# @param vars [Rmk::Vars] build's upstream vars
+	# @param vars [Rmk::Vars] build's vars, setup outside becouse need preset some vars
 	def initialize(dir, vars, input, implicit_input, order_only_input, output, implicit_output)
-		@dir, @vars = dir, Rmk::Vars.new(vars)
+		@dir, @vars = dir, vars
 		@infiles = []
 		regin = proc{|fn| @infiles << dir.reg_in_file(self, fn)}
 		input.each &regin
@@ -266,12 +266,15 @@ class Rmk::Dir
 			raise 'input syntax error' unless (1..3) === iparms.size
 			oparms = Rmk.split_parms parms[1], '&'
 			raise 'output syntax error' unless (1..2) === oparms.size
-			iparms.map!{|fns| Rmk.split_parms state[:vars].preprocess_str fns}
-			oparms.map!{|fns| Rmk.split_parms state[:vars].preprocess_str fns}
+			iparms[0] = Rmk.split_parms(state[:vars].preprocess_str iparms[0]).map!{|fn| state[:vars].unescape_str fn}
 			vars = Rmk::Vars.new @rules[match[:rule]].vars
 			if eachmode
+				find_inputfiles(*iparms[0]).each do |fn|
+					nvars = Rmk::Vars.new vars
+					@builds << Rmk::Build.new(self, nvars, iparms[0], iparms[1], iparms[2], oparms[0], oparms[1])
+				end
 			else
-				@builds << Rmk::Build.new(self, vars, iparms[0], iparms[1], iparms[2], oparms[0], oparms[1])
+				@builds << Rmk::Build.new(self, Rmk::Vars.new(vars), iparms[0], iparms[1], iparms[2], oparms[0], oparms[1])
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'
