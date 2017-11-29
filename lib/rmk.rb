@@ -219,53 +219,42 @@ class Rmk::Dir
 			return
 		end
 		case firstword
-		when /^if(n)?eq$/
-			value = Regexp.last_match(1)
+		when /^if(n)?(?:(eq)|def)$/
+			logicnot, logicmod = Regexp.last_match(1), Regexp.last_match(2)
 			state = begin_define_nonvar indent
 			parms = Rmk.split_parms state[:vars].preprocess_str line
-			raise 'must have two str' unless parms.size == 2
-			value = value ? parms[0] != parms[1] : parms[0] == parms[1]
-			@state << {indent:indent, type: :Condition, condition:value, vars:state[:vars]}
-		when /^if(n)?def$/
-			value = Regexp.last_match(1)
-			state = begin_define_nonvar indent
-			parms = Rmk.split_parms state[:vars].preprocess_str line
-			raise 'must have var name' if parms.empty?
-			value = value ? parms.all{|parm| !@vars.include? state[:vars].unescape_str parm} :
-				parms.all{|parm| @vars.include? state[:vars].unescape_str parm}
-			@state << {indent:indent, type: :Condition, condition:value, vars:state[:vars]}
-		when 'else'
-			raise 'syntax error' unless line.match? /^\s*$/
-			while state
-				raise 'not if condition' if state[:condition].nil?
-				if state[:type]&.== :Condition
-					raise 'invalid indent' unless indent == state[:indent]
-					return state[:condition] = false
-				end
-				@state.pop
-				state = @state[-1]
+			if logicmod
+				raise 'must have two str' unless parms.size == 2
+				parms[0] = state[:vars].unescape_str parms[0]
+				parms[1] = state[:vars].unescape_str parms[1]
+				value = logicnot ? parms[0] != parms[1] : parms[0] == parms[1]
+			else
+				raise 'must have var name' if parms.empty?
+				value = logicnot ? parms.all?{|parm| !@vars.include? state[:vars].unescape_str parm} :
+					parms.all?{|parm| @vars.include? state[:vars].unescape_str parm}
 			end
-			raise 'not found match if'
-		when 'endif'
-			raise 'syntax error' unless line.match? /^\s*$/
+			@state << {indent:indent, type: :Condition, condition:value, vars:state[:vars]}
+		when 'else', 'endif'
+			raise 'syntax error' if line
+			endmod = firstword != 'else'
 			while state
 				raise 'not if condition' if state[:condition].nil?
 				if state[:type]&.== :Condition
 					raise 'invalid indent' unless indent == state[:indent]
-					return @state.pop
+					return endmod ? @state.pop : state[:condition] = false
 				end
 				@state.pop
 				state = @state[-1]
 			end
 			raise 'not found match if'
 		when 'rule'
-			raise 'rule name or command invalid' unless line =~ /^\s+(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/
+			raise 'rule name or command invalid' unless line =~ /^(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/
 			state = begin_define_nonvar indent
 			raise "rule '#{name}' has been defined" if @rules.include? name
 			rule = @rules[name] = Rmk::Rule.new @vars, 'command'=>command
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:rule.vars}
 		when /^build(each)?$/
-			eachmode = $1
+			eachmode = Regexp.last_match 1
 			state = begin_define_nonvar indent
 			match = /^(?<rule>\w+)\s+(?<parms>.*)$/.match line
 			raise 'syntax error' unless match
@@ -319,7 +308,7 @@ class Rmk::Dir
 			join_threads
 		else
 			match = /^=\s*(?<value>.*)$/.match line
-			raise "#{lid} : ”Ô∑®¥ÌŒÛ" unless match
+			raise 'syntax error' unless match
 			define_var indent, firstword, match[:value]
 		end
 	end
