@@ -123,14 +123,18 @@ class Rmk::Dir
 
 	private def begin_define_nonvar(indent)
 		last = @state[-1]
-		case last[:subindent]
-		when :var		# rule or build context which can add var
+		case last[:type]
+		when :AcceptVar		# rule or build context which can add var
 			@state.pop
 			last = @state[-1]
 			raise 'invalid indent' unless indent == last[:indent]
-		when :condition	# just after condition context
+		when :SubVar
+			@state.pop 2
+			last = @state[-1]
+			raise 'invalid indent' unless indent == last[:indent]
+		when :Condition	# just after condition context
 			raise 'invalid indent' unless indent > last[:indent]
-			@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
+			@state << {indent:indent, type:nil, condition:last[:condition], vars:last[:vars]}
 			last = @state[-1]
 		else			# general context
 			raise 'invalid indent' unless indent == last[:indent]
@@ -140,25 +144,29 @@ class Rmk::Dir
 
 	private def end_last_define
 		last = @state[-1]
-		@state.pop if last[:subindent] == :var
+		if last[:type] == :SubVar
+			@state.pop 2
+		elsif last[:type] == :AcceptVar
+			@state.pop
+		end
 	end
 
 	def define_var(indent, name, value)
 		last = @state[-1]
-		case last[:subindent]
-		when :var		# rule or build context which can add var
+		case last[:type]
+		when :AcceptVar		# rule or build context which can add var
 			raise 'invalid indent' if indent < last[:indent]
 			if indent > last[:indent]
-				@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
+				@state << {indent:indent, type: :SubVar, condition:last[:condition], vars:last[:vars]}
 				last = @state[-1]
 			else
 				@state.pop
 				last = @state[-1]
 				raise 'invalid indent' unless indent == last[:indent]
 			end
-		when :condition	# just after condition context
+		when :Condition	# just after condition context
 			raise 'invalid indent' unless indent > last[:indent]
-			@state << {indent:indent, subindent:nil, condition:last[:condition], vars:last[:vars]}
+			@state << {indent:indent, type:nil, condition:last[:condition], vars:last[:vars]}
 			last = @state[-1]
 		else			# general context
 			raise 'invalid indent' unless indent == last[:indent]
@@ -184,7 +192,7 @@ class Rmk::Dir
 	end
 
 	def parse_file(file)
-		last_state, @state = @state, [{indent:0, subindent:nil, condition:nil, vars:@vars}]
+		last_state, @state = @state, [{indent:0, type:nil, condition:nil, vars:@vars}]
 		lines = IO.readlines file
 		lid = 0
 		while lid < lines.size
@@ -201,25 +209,13 @@ class Rmk::Dir
 	end
 
 	def parse_line(line, lid)
-		match = /^(?<indent>\s*)(?:(?<firstword>\w+)(?:\s*|\s+(?<content>.*)))?$/.match line
+		match = /^(?<indent> *|\t*)(?:(?<firstword>\w+)(?:\s*|\s+(?<content>.*)))?$/.match line
 		raise 'syntax error' unless match
 		indent, firstword, line = match[:indent].size, match[:firstword], match[:content]
 		return end_last_define unless firstword
 		state = @state[-1]
-		if !state[:condition].nil? && !state[:condition]
-			case firstword
-			when /^ifn?(?:eq|def)$/
-				raise 'invalid indent' unless indent > last[:indent]
-				@state << {indent:indent, subindent: :condition, condition:false, vars:last[:vars]}
-			when 'else'
-				raise 'syntax error' unless line.match? /^\s*$/
-				raise 'invalid indent' unless indent == last[:indent]
-				last[:condition] = true
-			when 'endif'
-				raise 'syntax error' unless line.match? /^\s*$/
-				raise 'invalid indent' unless indent == last[:indent]
-				@state.pop
-			end
+		if !state[:condition].nil? && !state[:condition]		# false state fast process
+			@state.pop if indent == state[:indent] && firstword == 'endif'
 			return
 		end
 		case firstword
@@ -229,7 +225,7 @@ class Rmk::Dir
 			parms = Rmk.split_parms state[:vars].preprocess_str line
 			raise 'must have two str' unless parms.size == 2
 			value = value ? parms[0] != parms[1] : parms[0] == parms[1]
-			@state << {indent:indent, subindent: :condition, condition:value, vars:state[:vars]}
+			@state << {indent:indent, type: :Condition, condition:value, vars:state[:vars]}
 		when /^if(n)?def$/
 			value = Regexp.last_match(1)
 			state = begin_define_nonvar indent
@@ -237,23 +233,24 @@ class Rmk::Dir
 			raise 'must have var name' if parms.empty?
 			value = value ? parms.all{|parm| !@vars.include? state[:vars].unescape_str parm} :
 				parms.all{|parm| @vars.include? state[:vars].unescape_str parm}
-			@state << {indent:indent, subindent: :condition, condition:value, vars:state[:vars]}
+			@state << {indent:indent, type: :Condition, condition:value, vars:state[:vars]}
 		when 'else'
 			raise 'syntax error' unless line.match? /^\s*$/
 			while state
 				raise 'not if condition' if state[:condition].nil?
-				if state[:subindent]&.== :condition
+				if state[:type]&.== :Condition
 					raise 'invalid indent' unless indent == state[:indent]
 					return state[:condition] = false
 				end
 				@state.pop
 				state = @state[-1]
 			end
+			raise 'not found match if'
 		when 'endif'
 			raise 'syntax error' unless line.match? /^\s*$/
 			while state
 				raise 'not if condition' if state[:condition].nil?
-				if state[:subindent]&.== :condition
+				if state[:type]&.== :Condition
 					raise 'invalid indent' unless indent == state[:indent]
 					return @state.pop
 				end
@@ -266,7 +263,7 @@ class Rmk::Dir
 			state = begin_define_nonvar indent
 			raise "rule '#{name}' has been defined" if @rules.include? name
 			rule = @rules[name] = Rmk::Rule.new @vars, 'command'=>command
-			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:rule}
+			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:rule.vars}
 		when /^build(each)?$/
 			eachmode = $1
 			state = begin_define_nonvar indent
@@ -287,7 +284,7 @@ class Rmk::Dir
 				@builds << Rmk::Build.new(self, match[:rule], iparms[0], iparms[1], iparms[2], oparms[0], oparms[1]).bind_vars(vars)
 				vars = @builds[-1].vars
 			end
-			@state << {indent:indent, subindent: :var, condition:state[:condition], vars:vars}
+			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'
 		when 'include'
 			state = begin_define_nonvar indent
