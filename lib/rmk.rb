@@ -57,7 +57,7 @@ class Rmk::Build
 
 	# create Build
 	# @param dir [Rmk::Dir] build's dir
-	# @param vars [Rmk::Vars] build's upstream of share vars, when define 'buildeach' it's share vars, otherwise it's rule's vars
+	# @param vars [Rmk::Vars] build's upstream vars
 	def initialize(dir, vars, input, implicit_input, order_only_input, output, implicit_output)
 		@dir, @vars = dir, Rmk::Vars.new(vars)
 		@infiles = []
@@ -248,10 +248,11 @@ class Rmk::Dir
 			end
 			raise 'not found match if'
 		when 'rule'
-			raise 'rule name or command invalid' unless line =~ /^(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/
+			match = /^(?<name>\w+)\s*(?:=\s*(?<command>.*))?$/.match line
+			raise 'rule name or command invalid' unless match
 			state = begin_define_nonvar indent
-			raise "rule '#{name}' has been defined" if @rules.include? name
-			rule = @rules[name] = Rmk::Rule.new @vars, 'command'=>command
+			raise "rule '#{match[:name]}' has been defined" if @rules.include? match[:name]
+			rule = @rules[match[:name]] = Rmk::Rule.new state[:vars], 'command'=>command
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:rule.vars}
 		when /^build(each)?$/
 			eachmode = Regexp.last_match 1
@@ -267,11 +268,10 @@ class Rmk::Dir
 			raise 'output syntax error' unless (1..2) === oparms.size
 			iparms.map!{|fns| Rmk.split_parms state[:vars].preprocess_str fns}
 			oparms.map!{|fns| Rmk.split_parms state[:vars].preprocess_str fns}
+			vars = Rmk::Vars.new @rules[match[:rule]].vars
 			if eachmode
-				vars = {}
 			else
-				@builds << Rmk::Build.new(self, match[:rule], iparms[0], iparms[1], iparms[2], oparms[0], oparms[1]).bind_vars(vars)
-				vars = @builds[-1].vars
+				@builds << Rmk::Build.new(self, vars, iparms[0], iparms[1], iparms[2], oparms[0], oparms[1])
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'
