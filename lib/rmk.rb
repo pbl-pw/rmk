@@ -1,9 +1,15 @@
 require 'rmk/version'
 
 class Rmk
+	# normalize path, drive letter upcase and path seperator set to '/'
+	# @param path [String]
+	# @return [String]
 	def self.normalize_path(path) path.gsub(?\\, ?/).sub(/^[a-z](?=:)/){|ch|ch.upcase} end
 
 	# split parms using un-escape space as separator
+	# @param line [String] str to split
+	# @param sep [String] regex for separator
+	# @return [Array<String>]
 	def self.split_parms(line, sep = '\s+')
 		result = []
 		until line.empty?
@@ -14,15 +20,20 @@ class Rmk
 		result
 	end
 
+	# create Rmk object
+	# @param srcroot [String] source file root dir, can be abslute path or relative to outroot path(start with '../')
 	def initialize(srcroot, outroot = '')
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
 		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
-		@src_relative = Rmk.normalize_path srcroot
-		@rootdir = Rmk::Dir.new self, nil
+		@src_relative = srcroot.match?(/^\.\.[\\\/]/) && Rmk.normalize_path(srcroot)
+		@virtual_root = Rmk::Dir.new self, nil
 		::Dir.mkdir @outroot unless Dir.exist? @outroot
-		@rootdir.parse
+		@virtual_root.parse
 	end
-	attr_reader :srcroot, :outroot, :src_relative
+	attr_reader :srcroot, :outroot, :src_relative, :virtual_root
+
+	# join src file path relative to out root, or absloute src path when not relative src
+	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
 
 	def build(*tgts)
 	end
@@ -63,7 +74,8 @@ class Rmk::Build
 	# @param dir [Rmk::Dir] build's dir
 	# @param vars [Rmk::Vars] build's vars, setup outside becouse need preset some vars
 	def initialize(dir, vars, input, implicit_input, order_only_input, output, implicit_output)
-		@dir, @vars = dir, vars
+		@dir = dir
+		@vars = vars
 		@infiles = []
 		regin = proc{|fn| @infiles << dir.reg_in_file(self, fn)}
 		input.each &regin
@@ -103,9 +115,14 @@ class Rmk::Dir
 	# @param parent [Rmk::Dir, nil] parent virtual dir, or nil for root
 	# @param path [String] path relative to parent, or empty for root
 	def initialize(rmk, parent, path = '')
-		@rmk, @defaultfile = rmk, nil
-		@vars, @rules, @subdirs = Rmk::Vars.new(nil), {}, {}
-		@srcfiles, @outfiles, @builds = {}, {}, []
+		@rmk = rmk
+		@defaultfile = nil
+		@vars = Rmk::Vars.new(nil)
+		@rules = {}
+		@subdirs = {}
+		@srcfiles = {}
+		@outfiles = {}
+		@builds = []
 		@virtual_path = parent&.join_virtual_path path
 		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path, ''
 		@abs_out_path = ::File.join @rmk.outroot, @virtual_path, ''
@@ -124,7 +141,8 @@ class Rmk::Dir
 
 	def join_virtual_path(file) @virtual_path ? ::File.join(@virtual_path, file) : file end
 
-	def join_relative_src_path(file) ::File.join @rmk.src_relative, join_virtual_path(file) end
+	# join src file path relative to out root, or absloute src path when not relative src
+	def join_rto_src_path(file) @rmk.join_rto_src_path join_virtual_path(file) end
 
 	def find_inputfiles(pattern)
 		pattern = Rmk.normalize_path pattern
