@@ -21,18 +21,19 @@ class Rmk
 	end
 
 	# create Rmk object
-	# @param srcroot [String] source file root dir, can be abslute path or relative to outroot path(start with '../')
+	# @param srcroot [String] source file root dir, can be absolute path or relative to outroot path(start with '../')
 	def initialize(srcroot, outroot = '')
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
 		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
 		@src_relative = srcroot.match?(/^\.\.[\\\/]/) && Rmk.normalize_path(srcroot)
 		@virtual_root = Rmk::Dir.new self, nil
 		::Dir.mkdir @outroot unless Dir.exist? @outroot
+		@srcfiles = {}
 		@virtual_root.parse
 	end
-	attr_reader :srcroot, :outroot, :src_relative, :virtual_root
+	attr_reader :srcroot, :outroot, :src_relative, :virtual_root, :srcfiles
 
-	# join src file path relative to out root, or absloute src path when not relative src
+	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
 
 	def build(*tgts)
@@ -141,7 +142,7 @@ class Rmk::Dir
 
 	def join_virtual_path(file) @virtual_path ? ::File.join(@virtual_path, file) : file end
 
-	# join src file path relative to out root, or absloute src path when not relative src
+	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(file) @rmk.join_rto_src_path join_virtual_path(file) end
 
 	def find_inputfiles(pattern)
@@ -152,9 +153,10 @@ class Rmk::Dir
 	end
 
 	def find_srcfiles(pattern)
-		return Dir[pattern] if pattern.match? /[a-z]:/i
-		pattern = join_abs_src_path pattern
-		Dir[pattern].map!{|fn| fn.delete! @abs_src_path}
+		raise "file pattern can't be absolute path" if pattern.match? /^[a-z]:/i
+		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/
+		raise "file syntax '#{pattern}' error" unless match
+		Dir[pattern].map! {|fn| @rmk.srcfiles[fn] || (@rmk.srcfiles[fn] = {path: fn, src?: true})}
 	end
 
 	# add a output file
