@@ -14,11 +14,15 @@ class Rmk
 		result
 	end
 
-	def initialize(srcroot, outroot)
-		@rootdir = Rmk::Dir.new self, Rmk.normalize_path(srcroot), Rmk.normalize_path(outroot)
-		::Dir.mkdir outroot unless Dir.exist? outroot
+	def initialize(srcroot, outroot = '')
+		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
+		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
+		@src_relative = Rmk.normalize_path srcroot
+		@rootdir = Rmk::Dir.new self, nil
+		::Dir.mkdir @outroot unless Dir.exist? @outroot
 		@rootdir.parse
 	end
+	attr_reader :srcroot, :outroot, :src_relative
 
 	def build(*tgts)
 	end
@@ -88,30 +92,39 @@ class Rmk::Build
 end
 
 class Rmk::Dir
-	attr_reader :rmk, :srcroot, :outroot, :path, :full_src_path, :full_out_path
+	attr_reader :rmk, :abs_src_path, :abs_out_path
 	attr_reader :srcfiles, :outfiles, :builds
 	attr_reader :vars, :rules, :subdirs
 	attr_writer :defaultfile
 	protected :defaultfile=
 
-	def initialize(rmk, srcroot, outroot, path = '')
-		@rmk, @srcroot, @outroot, @path, @defaultfile = rmk, srcroot, outroot, path, nil
+	# create virtual dir
+	# @param rmk [Rmk] Rmk obj
+	# @param parent [Rmk::Dir, nil] parent virtual dir, or nil for root
+	# @param path [String] path relative to parent, or empty for root
+	def initialize(rmk, parent, path = '')
+		@rmk, @defaultfile = rmk, nil
 		@vars, @rules, @subdirs = Rmk::Vars.new(nil), {}, {}
 		@srcfiles, @outfiles, @builds = {}, {}, []
-		@full_src_path = ::File.join @srcroot, @path, ''
-		@full_out_path = ::File.join @outroot, @path, ''
+		@virtual_path = parent&.join_virtual_path path
+		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path, ''
+		@abs_out_path = ::File.join @rmk.outroot, @virtual_path, ''
 	end
 
 	def include_subdir(path)
 		return @subdirs[path] if @subdirs.include? path
-		dir = @subdirs[path] = Rmk::Dir.new @rmk, @srcroot, @outroot, path
+		dir = @subdirs[path] = Rmk::Dir.new @rmk, self, path
 		dir.defaultfile = @defaultfile
 		dir
 	end
 
-	def join_src_path(file) ::File.join @full_src_path, file end
+	def join_abs_src_path(file) ::File.join @abs_src_path, file end
 
-	def join_out_path(file) ::File.join @full_out_path, file end
+	def join_abs_out_path(file) ::File.join @abs_out_path, file end
+
+	def join_virtual_path(file) @virtual_path ? ::File.join(@virtual_path, file) : file end
+
+	def join_relative_src_path(file) ::File.join @rmk.src_relative, join_virtual_path(file) end
 
 	def find_inputfiles(pattern)
 		pattern = Rmk.normalize_path pattern
@@ -122,8 +135,8 @@ class Rmk::Dir
 
 	def find_srcfiles(pattern)
 		return Dir[pattern] if pattern.match? /[a-z]:/i
-		pattern = join_src_path pattern
-		Dir[pattern].map!{|fn| fn.delete! @full_src_path}
+		pattern = join_abs_src_path pattern
+		Dir[pattern].map!{|fn| fn.delete! @abs_src_path}
 	end
 
 	# add a output file
@@ -188,13 +201,13 @@ class Rmk::Dir
 	end
 
 	def parse
-		raise "dir '#{@full_src_path}' has been parsed" if @state
+		raise "dir '#{@abs_src_path}' has been parsed" if @state
 		@state = []
-		file = join_src_path 'default.rmk'
+		file = join_abs_src_path 'default.rmk'
 		@defaultfile = file if ::File.exist? file
-		file = join_out_path 'config.rmk'
+		file = join_abs_out_path 'config.rmk'
 		parse_file file if ::File.exist? file
-		file = join_src_path 'dir.rmk'
+		file = join_abs_src_path 'dir.rmk'
 		if ::File.exist? file
 			parse_file file
 		elsif @defaultfile
@@ -302,9 +315,9 @@ class Rmk::Dir
 					raise "file '#{parm}' not exist" unless ::File.exist? parm
 					parse_file parm
 				else
-					file = join_out_path parm
+					file = join_abs_out_path parm
 					next parse_file file if ::File.exist? file
-					file = join_src_path parm
+					file = join_abs_src_path parm
 					next parse_file file if ::File.exist? file
 					raise "file '#{parm}' not exist"
 				end
@@ -315,10 +328,10 @@ class Rmk::Dir
 			raise "#{lid}; must have dir name or matcher" if parms.empty?
 			parms.each do |parm|
 				parm = state[:vars].unescape_str parm
-				dirs = ::Dir[::File.join @full_src_path, parm, '']
+				dirs = ::Dir[::File.join @abs_src_path, parm, '']
 				raise "#{lid}: subdir '#{parm}' doesn't exist" if dirs.empty?
 				dirs.each do |dir|
-					dir = include_subdir dir.sub @full_src_path, ''
+					dir = include_subdir dir.sub @abs_src_path, ''
 					new_thread {dir.parse}
 				end
 			end
