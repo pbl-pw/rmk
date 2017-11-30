@@ -146,17 +146,25 @@ class Rmk::Dir
 	def join_rto_src_path(file) @rmk.join_rto_src_path join_virtual_path(file) end
 
 	def find_inputfiles(pattern)
+		raise "file pattern can't be absolute path" if pattern.match? /^[a-z]:/i
 		pattern = Rmk.normalize_path pattern
+		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/.match pattern
+		raise "file syntax '#{pattern}' error" unless match
+		dir, prefix, postfix = *match[1..3]
 		files = find_srcfiles pattern
-		return files if pattern.match? /^[a-z]:/i
 		files.concat find_outfiles(pattern)
+		files[0][:stem] = files[0][/#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/, 1] if files.size == 1 && postfix
+		files
 	end
 
 	def find_srcfiles(pattern)
-		raise "file pattern can't be absolute path" if pattern.match? /^[a-z]:/i
-		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/
-		raise "file syntax '#{pattern}' error" unless match
-		Dir[pattern].map! {|fn| @rmk.srcfiles[fn] || (@rmk.srcfiles[fn] = {path: fn, src?: true})}
+		Dir[join_abs_src_path pattern].map! do |fn|
+			next @srcfiles[fn] if @srcfiles.include? fn
+			@srcfiles[fn] = {path: fn, vpath:fn[@rmk.srcroot.size .. -1], src?: true}
+		end
+	end
+
+	def find_outfiles(pattern)
 	end
 
 	# add a output file
