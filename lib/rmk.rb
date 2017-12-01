@@ -39,7 +39,7 @@ class Rmk
 	def find_srcfiles(path)
 		# mutex lock if multithread
 		return @srcfiles[path] if @srcfiles.include? path
-		return unless ::File.exist? path
+		raise "file '#{path}' not exist" unless ::File.exist? path
 		@srcfiles[path] = {path:path}
 		# mutex unlock if multithread
 	end
@@ -353,15 +353,21 @@ class Rmk::Dir
 			oparms = Rmk.split_parms parms[1], '&'
 			raise 'output syntax error' unless (1..2) === oparms.size
 			iparms[0] = Rmk.split_parms(state[:vars].preprocess_str iparms[0]).map!{|fn| state[:vars].unescape_str fn}
+			raise 'must have input file' if iparms[0].size == 0
 			vars = Rmk::Vars.new @rules[match[:rule]].vars
 			if eachmode
 				iparms[0].each do |fn|
-					files = find_inputfiles fn
-					nvars = Rmk::Vars.new vars
-					@builds << Rmk::Build.new(self, nvars, iparms[0], iparms[1], iparms[2], oparms[0], oparms[1])
+					files, regex = find_inputfiles fn
+					files.each do |file|
+						nvars = Rmk::Vars.new vars
+						nvars[:in_stem] = file[:vpath][regex, 1] if regex
+						@builds << Rmk::Build.new(self, nvars, [file], iparms[1], iparms[2], oparms[0], oparms[1])
+					end
 				end
 			else
-				@builds << Rmk::Build.new(self, Rmk::Vars.new(vars), iparms[0], iparms[1], iparms[2], oparms[0], oparms[1])
+				files = []
+				iparms[0].each {|fn| files.concat find_inputfiles(fn)[0]}
+				@builds << Rmk::Build.new(self, Rmk::Vars.new(vars), files, iparms[1], iparms[2], oparms[0], oparms[1])
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'
