@@ -90,11 +90,23 @@ class Rmk::Build
 	def initialize(dir, vars, input, implicit_input, order_only_input, output, implicit_output)
 		@dir = dir
 		@vars = vars
-		@infiles = []
-		regin = proc{|fn| @infiles << dir.reg_in_file(self, fn)}
-		input.each &regin
-		@vars['in'] = @infiles.map{|f| %|"#{f['path']}"|}.join ' '
-		implicit_input.each &regin if implicit_input
+		@infiles = input
+		@vars['in'] = @infiles.map do |file|
+			next file[:vpath] unless file[:src?]
+			file[:vpath] ? @rmk.join_rto_src_path file[:vpath] : file[:path]
+		end.join ' '
+		if @infiles.size == 1 && @infiles[0].include?(:vpath)
+			vpath = @infiles[0][:vpath]
+			@vars['vin'] = vpath
+			@vars['vin_nodir'] = vpath[/([^\/]*)$/, 1]
+			@vars['vin_nodir'] =~ /^(.*)\.([^\.]*)$/
+			@vars['vin_base'], @vars['vin_ext'] = $1, $2
+		end
+		implicit_input&.each do |fn|
+			files, _ = @dir.find_inputfiles fn
+			raise "pattern '#{fn}' not match any file" if files.empty?
+			files.each{|f| f[:ibuild] ? f[:ibuild] << self : f[:ibuild] = [self]}
+		end
 		@orderfiles = []
 		order_only_input.each{|fn| @orderfiles << dir.reg_order_file(self, fn)} if order_only_input
 		@outfiles = []
