@@ -44,6 +44,11 @@ class Rmk
 		# mutex unlock if multithread
 	end
 
+	# add default target
+	def add_default(*files)
+		# need implement
+	end
+
 	def build(*tgts)
 	end
 
@@ -168,7 +173,7 @@ class Rmk::Dir
 		dir, prefix, postfix = *match[1..3]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
 		files = find_srcfiles_imp pattern
-		files.concat find_outfiles_imp dir, regex
+		files.concat find_outfiles_imp  regex ? dir : pattern, regex
 		[files, regex]
 	end
 
@@ -197,6 +202,17 @@ class Rmk::Dir
 		subdir = $1
 		return files unless @subdirs.include? subdir
 		files + @subdirs[subdir].find_outfiles_imp(path, regex)
+	end
+
+	# find files which must be build's output
+	# @param pattern [String] virtual path to find out files which can include '*' to match any char at last no dir part
+	# @return [Array<Hash>] return Array of file, and Regex when has '*' pattern
+	def find_outfiles(pattern)
+		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/.match pattern
+		raise "file syntax '#{pattern}' error" unless match
+		dir, prefix, postfix = *match[1..3]
+		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
+		find_outfiles_imp regex ? dir : pattern, regex
 	end
 
 	# add a output file
@@ -371,6 +387,14 @@ class Rmk::Dir
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'
+			state = begin_define_nonvar indent
+			parms = Rmk.split_parms state[:vars].preprocess_str line
+			raise "must have file name" if parms.empty?
+			parms.each do |parm|
+				files = find_outfiles parm
+				raise "pattern '#{parm}' not match any out file" if files.empty?
+				@rmk.add_default *files
+			end
 		when 'include'
 			state = begin_define_nonvar indent
 			parms = Rmk.split_parms state[:vars].preprocess_str line
