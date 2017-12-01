@@ -158,6 +158,18 @@ class Rmk::Dir
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(file) @rmk.join_rto_src_path join_virtual_path(file) end
 
+	# split virtual path pattern to dir part and file match regex part
+	# @param pattern [String] virtual path, can include '*' to match any char at last no dir part
+	# @return [Array(String, <Regex, nil>)] when pattern include '*', return [dir part, file match regex]
+	# ;otherwise return [origin pattern, nil]
+	def split_vpath_pattern(pattern)
+		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/.match pattern
+		raise "file syntax '#{pattern}' error" unless match
+		dir, prefix, postfix = *match[1..3]
+		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
+		[regex ? dir : pattern, regex]
+	end
+
 	# find files which can be build's imput file
 	# @param pattern [String] virtual path to find src and out files which can include '*' to match any char at last no dir part
 	# ;or absolute path to find a src file which not in src tree
@@ -168,12 +180,9 @@ class Rmk::Dir
 			file = @rmk.find_srcfiles pattern
 			return [file && [file] || [], nil]
 		end
-		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/.match pattern
-		raise "file syntax '#{pattern}' error" unless match
-		dir, prefix, postfix = *match[1..3]
-		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
+		dir, regex = split_vpath_pattern pattern
 		files = find_srcfiles_imp pattern
-		files.concat find_outfiles_imp  regex ? dir : pattern, regex
+		files.concat find_outfiles_imp  dir, regex
 		[files, regex]
 	end
 
@@ -207,13 +216,7 @@ class Rmk::Dir
 	# find files which must be build's output
 	# @param pattern [String] virtual path to find out files which can include '*' to match any char at last no dir part
 	# @return [Array<Hash>] return Array of file, and Regex when has '*' pattern
-	def find_outfiles(pattern)
-		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/.match pattern
-		raise "file syntax '#{pattern}' error" unless match
-		dir, prefix, postfix = *match[1..3]
-		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
-		find_outfiles_imp regex ? dir : pattern, regex
-	end
+	def find_outfiles(pattern) find_outfiles_imp *split_vpath_pattern(pattern) end
 
 	# add a output file
 	# @param name file name, must relative to this dir
