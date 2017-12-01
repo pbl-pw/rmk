@@ -36,6 +36,14 @@ class Rmk
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
 
+	def find_srcfiles(path)
+		# mutex lock if multithread
+		return @srcfiles[path] if @srcfiles.include? path
+		return unless ::File.exist? path
+		@srcfiles[path] = {path:path}
+		# mutex unlock if multithread
+	end
+
 	def build(*tgts)
 	end
 
@@ -145,26 +153,50 @@ class Rmk::Dir
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(file) @rmk.join_rto_src_path join_virtual_path(file) end
 
+	# find files which can be build's imput file
+	# @param pattern [String] virtual path to find src and out files which can include '*' to match any char at last no dir part
+	# ;or absolute path to find a src file which not in src tree
+	# @return [Array(Array<Hash>, <Regex,nil>)] return Array of file, and Regex when has '*' pattern
 	def find_inputfiles(pattern)
-		raise "file pattern can't be absolute path" if pattern.match? /^[a-z]:/i
 		pattern = Rmk.normalize_path pattern
+		if pattern.match? /^[A-Z]:/
+			file = @rmk.find_srcfiles pattern
+			return [file && [file] || [], nil]
+		end
 		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
 		dir, prefix, postfix = *match[1..3]
-		files = find_srcfiles pattern
-		files.concat find_outfiles(pattern)
-		files[0][:stem] = files[0][/#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/, 1] if files.size == 1 && postfix
-		files
+		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
+		files = find_srcfiles_imp pattern
+		files.concat find_outfiles_imp dir, regex
+		[files, regex]
 	end
 
-	def find_srcfiles(pattern)
+	# find srcfiles raw implement(assume all parms valid)
+	# @param pattern [String] virtual path, can include '*' to match any char at last no dir part
+	# @return [Array<Hash>]
+	protected def find_srcfiles_imp(pattern)
 		Dir[join_abs_src_path pattern].map! do |fn|
 			next @srcfiles[fn] if @srcfiles.include? fn
-			@srcfiles[fn] = {path: fn, vpath:fn[@rmk.srcroot.size .. -1], src?: true}
+			@srcfiles[fn] = {path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1], src?: true}
 		end
 	end
 
-	def find_outfiles(pattern)
+	# find outfiles raw implement(assume all parms valid)
+	# @param path [String] virtual path, if regex, path must be dir(end with '/') or empty, otherwise contrary
+	# @param regex [Regexp, nil] if not nil, file match regexp
+	# @return [Array<Hash>]
+	protected def find_outfiles_imp(path, regex)
+		files = []
+		if regex
+			@outfiles.each{|k,v| files << v if k.start_with?(path) && k[path.size .. -1].match?(regex)}
+		else
+			files << @outfiles[path] if @outfiles.include? path
+		end
+		return files unless path.sub! /^([^\/]+)\//, ''
+		subdir = $1
+		return files unless @subdirs.include? subdir
+		files + @subdirs[subdir].find_outfiles_imp(path, regex)
 	end
 
 	# add a output file
