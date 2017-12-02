@@ -56,6 +56,7 @@ class Rmk
 	class Rule < Vars
 		def vars; self end
 	end
+	class VFile; end
 end
 
 class Rmk::Vars
@@ -79,6 +80,28 @@ class Rmk::Vars
 	def interpolate_str(str) unescape_str preprocess_str str end
 end
 
+# virtual file which represent a real OS file
+class Rmk::VFile
+	attr_reader :path, :vpath, :is_src
+
+	def src?; @is_src end
+
+	# builds which include this file as input file
+	def input_ref_builds; @ibuilds end
+
+	# builds which include this file as order-only file
+	def order_ref_builds; @odbuilds end
+
+	# builds which include this file as output file
+	def output_ref_builds; @obuilds end
+
+	def initialize(path:, vpath:nil, is_src:false)
+		@path, @vpath, @is_src = path, vpath, is_src
+		@ibuilds = []
+		@obuilds, @odbuilds = [], [] unless is_src
+	end
+end
+
 class Rmk::Build
 	attr_reader :dir
 	attr_reader :infiles, :orderfiles, :outfiles
@@ -87,16 +110,22 @@ class Rmk::Build
 	# create Build
 	# @param dir [Rmk::Dir] build's dir
 	# @param vars [Rmk::Vars] build's vars, setup outside becouse need preset some vars
+	# @param input [Array<Rmk::VFile>] input files
+	# @param implicit_input [String, nil] implicit input raw string
+	# @param order_only_input [String, nil] order-only input raw string
+	# @param output [String, nil] output raw string
+	# @param implicit_output [String, nil] implicit output raw string
 	def initialize(dir, vars, input, implicit_input, order_only_input, output, implicit_output)
 		@dir = dir
 		@vars = vars
 		@infiles = input
 		@vars['in'] = @infiles.map do |file|
-			next file[:vpath] unless file[:src?]
-			file[:vpath] ? @rmk.join_rto_src_path file[:vpath] : file[:path]
+			file.input_ref_builds << self
+			next file.vpath unless file.src?
+			file.vpath ? @dir.rmk.join_rto_src_path file.vpath : file.path
 		end.join ' '
-		if @infiles.size == 1 && @infiles[0].include?(:vpath)
-			vpath = @infiles[0][:vpath]
+		if @infiles.size == 1 && @infiles[0].vpath
+			vpath = @infiles[0].vpath
 			@vars['vin'] = vpath
 			match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vpath
 			@vars['vin_dir'], @vars['vin_nodir'] = match[1], match[2]
@@ -109,7 +138,7 @@ class Rmk::Build
 			fn = @vars.unescape_str fn
 			files, _ = @dir.find_inputfiles fn
 			raise "pattern '#{fn}' not match any file" if files.empty?
-			files.each{|f| f[:ibuild] ? f[:ibuild] << self : f[:ibuild] = [self]}
+			files.each{|f| f.input_ref_builds << self}
 		end if implicit_input
 
 		@orderfiles = []
@@ -117,7 +146,7 @@ class Rmk::Build
 			fn = @vars.unescape_str fn
 			files, _ = @dir.find_inputfiles fn
 			raise "pattern '#{fn}' not match any file" if files.empty?
-			files.each{|f| f[:order] ? f[:order] << self : f[:order] = [self]}
+			files.each{|f| f.order_ref_builds << self}
 		end if order_only_input
 
 		@outfiles = []
@@ -134,8 +163,8 @@ class Rmk::Build
 			result = system cmd
 		end
 		@outfiles.each do |f|
-			f[:state] = :updated
-			f[:obuild].need_run! if f.include? :obuild
+			f.state = :updated
+			f.input_ref_builds&.each{|build| build.need_run!}
 		end if result
 	end
 end
@@ -215,7 +244,7 @@ class Rmk::Dir
 	protected def find_srcfiles_imp(pattern)
 		Dir[join_abs_src_path pattern].map! do |fn|
 			next @srcfiles[fn] if @srcfiles.include? fn
-			@srcfiles[fn] = {path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1], src?: true}
+			@srcfiles[fn] = VFile.new path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1], is_src: true
 		end
 	end
 
@@ -245,8 +274,8 @@ class Rmk::Dir
 	# @param name file name, must relative to this dir
 	def add_out_file(build, name)
 		name = @vars.unescape_str name
-		rpath = @path.empty? ? name : ::File.join(@path, name)
-		@outfiles[name] = {ibuild:build, path:rpath, state: :parsed}
+		file = @outfiles[name] = VFile.new path:join_abs_out_path(name), vpath:join_virtual_path(name)
+		file.output_ref_builds << build
 	end
 
 	private def begin_define_nonvar(indent)
