@@ -98,9 +98,11 @@ class Rmk::Build
 		if @infiles.size == 1 && @infiles[0].include?(:vpath)
 			vpath = @infiles[0][:vpath]
 			@vars['vin'] = vpath
-			@vars['vin_nodir'] = vpath[/([^\/]*)$/, 1]
-			@vars['vin_nodir'] =~ /^(.*)\.([^\.]*)$/
-			@vars['vin_base'], @vars['vin_ext'] = $1, $2
+			match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vpath
+			@vars['vin_dir'], @vars['vin_nodir'] = match[1], match[2]
+			match = /^(.*)\.(.*)$/.match match[2]
+			@vars['vin_base'], @vars['vin_ext'] = match[1], match[2]
+			@vars['vin_noext'] = @vars['vin_dir'] + @vars['vin_base']
 		end
 		implicit_input&.each do |fn|
 			files, _ = @dir.find_inputfiles fn
@@ -185,7 +187,7 @@ class Rmk::Dir
 	# find files which can be build's imput file
 	# @param pattern [String] virtual path to find src and out files which can include '*' to match any char at last no dir part
 	# ;or absolute path to find a src file which not in src tree
-	# @return [Array(Array<Hash>, <Regex,nil>)] return Array of file, and Regex when has '*' pattern
+	# @return [Array(Array<Hash>, <Regex,nil>)] return [files, regex], or [files, nil] when not include '*' pattern
 	def find_inputfiles(pattern)
 		pattern = Rmk.normalize_path pattern
 		if pattern.match? /^[A-Z]:/
