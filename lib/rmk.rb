@@ -104,13 +104,22 @@ class Rmk::Build
 			@vars['vin_base'], @vars['vin_ext'] = match[1], match[2]
 			@vars['vin_noext'] = @vars['vin_dir'] + @vars['vin_base']
 		end
-		implicit_input&.each do |fn|
+
+		Rmk.split_parms(@vars.preprocess_str implicit_input).each do |fn|
+			fn = @vars.unescape_str fn
 			files, _ = @dir.find_inputfiles fn
 			raise "pattern '#{fn}' not match any file" if files.empty?
 			files.each{|f| f[:ibuild] ? f[:ibuild] << self : f[:ibuild] = [self]}
-		end
+		end if implicit_input
+
 		@orderfiles = []
-		order_only_input.each{|fn| @orderfiles << dir.reg_order_file(self, fn)} if order_only_input
+		Rmk.split_parms(@vars.preprocess_str order_only_input).each do |fn|
+			fn = @vars.unescape_str fn
+			files, _ = @dir.find_inputfiles fn
+			raise "pattern '#{fn}' not match any file" if files.empty?
+			files.each{|f| f[:order] ? f[:order] << self : f[:order] = [self]}
+		end if order_only_input
+
 		@outfiles = []
 		regout = proc {|fn| @outfiles << dir.add_out_file(self, fn)}
 		output.each &regout
