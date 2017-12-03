@@ -29,19 +29,29 @@ class Rmk
 		@virtual_root = Rmk::Dir.new self, nil
 		::Dir.mkdir @outroot unless Dir.exist? @outroot
 		@srcfiles = {}
+		@outfiles = {}
 		@virtual_root.parse
 	end
-	attr_reader :srcroot, :outroot, :src_relative, :virtual_root, :srcfiles
+	attr_reader :srcroot, :outroot, :src_relative, :virtual_root, :srcfiles, :outfiles
 
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
 
-	def find_srcfiles(path)
+	def find_inputfile(path)
 		# mutex lock if multithread
+		return @outfiles[path] if @outfiles.include? path
 		return @srcfiles[path] if @srcfiles.include? path
 		raise "file '#{path}' not exist" unless ::File.exist? path
-		@srcfiles[path] = {path:path}
+		@srcfiles[path] = VFile.new path:path, is_src:true
 		# mutex unlock if multithread
+	end
+
+	# register a out file
+	# @param file [Rmk::VFile] virtual file object
+	def reg_out_file(file)
+		return file if @outfiles.include? file.path
+		@srcfiles.delete file.path if @srcfiles.include? file.path
+		@outfiles[file.path] = file
 	end
 
 	# add default target
@@ -82,7 +92,8 @@ end
 
 # virtual file which represent a real OS file
 class Rmk::VFile
-	attr_reader :path, :vpath, :is_src
+	attr_reader :path, :vpath
+	attr_accessor :is_src
 
 	def src?; @is_src end
 
@@ -229,7 +240,7 @@ class Rmk::Dir
 	def find_inputfiles(pattern)
 		pattern = Rmk.normalize_path pattern
 		if pattern.match? /^[A-Z]:/
-			file = @rmk.find_srcfiles pattern
+			file = @rmk.find_inputfile pattern
 			return [file && [file] || [], nil]
 		end
 		dir, regex = split_vpath_pattern pattern
