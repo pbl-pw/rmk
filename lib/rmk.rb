@@ -48,8 +48,9 @@ class Rmk
 
 	# register a out file
 	# @param file [Rmk::VFile] virtual file object
-	def reg_out_file(file)
-		return file if @outfiles.include? file.path
+	# @return [Rmk::VFile] return file obj back
+	def add_out_file(file)
+		raise "file '#{file.path}' has been defined" if @outfiles.include? file.path
 		@srcfiles.delete file.path if @srcfiles.include? file.path
 		@outfiles[file.path] = file
 	end
@@ -161,10 +162,14 @@ class Rmk::Build
 		end if order_only_input
 
 		@outfiles = []
-		regout = proc {|fn| @outfiles << dir.add_out_file(self, fn)}
-		output.each &regout
-		@vars['out'] = @outfiles.map{|f| %|"#{f['path']}"|}.join ' '
-		implicit_output.each &regout if implicit_output
+		regout = proc do |fn|
+			file = dir.add_out_file @vars.unescape_str fn
+			file.output_ref_builds << self
+			@outfiles << file
+		end
+		Rmk.split_parms(@vars.preprocess_str output).each &regout
+		@vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
+		Rmk.split_parms(@vars.preprocess_str implicit_output).each &regout if implicit_output
 	end
 
 	def run
@@ -283,10 +288,10 @@ class Rmk::Dir
 
 	# add a output file
 	# @param name file name, must relative to this dir
-	def add_out_file(build, name)
+	# @return [VFile] virtual file object
+	def add_out_file(name)
 		name = @vars.unescape_str name
-		file = @outfiles[name] = VFile.new path:join_abs_out_path(name), vpath:join_virtual_path(name)
-		file.output_ref_builds << build
+		@outfiles[name] = @rmk.add_out_file VFile.new(path:join_abs_out_path(name), vpath:join_virtual_path(name))
 	end
 
 	private def begin_define_nonvar(indent)
