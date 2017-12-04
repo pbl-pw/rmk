@@ -9,8 +9,8 @@ Gem::Specification.new do |spec|
 	spec.authors = ['pbl']
 	spec.email = ['a@pbl.pw']
 
-	spec.summary = %q{build tool link make, tup, ninja}
-	spec.description = %q{build tool link make, tup, ninja}
+	spec.summary = %q{build tool like make, tup, ninja}
+	spec.description = %q{build tool like make, tup, ninja}
 	spec.homepage = 'https://github.com/pbl-pw/rmk'
 
 	# Prevent pushing this gem to RubyGems.org. To allow pushes either set the 'allowed_push_host'
