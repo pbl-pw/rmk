@@ -22,29 +22,9 @@ class Rmk
 	end
 
 	# create Rmk object
-	# @param argv [Array<String>] parms list
-	def initialize(argv = ARGV)
-		options = {outroot:'', srcroot:''}
-		targets = OptionParser.new{ |opts|
-			opts.summary_width = 48
-			opts.banner = 'Usage£ºrmk [Options] [targets]'
-			opts.separator ''
-			opts.on '-C', '--directory=dir', 'output root dir,can be absolute or relative to pwd),default pwd' do |dir|
-				options[outroot:dir]
-			end
-			opts.on '-S', '--source=dir', 'source root dir,can be absolute or relative to output root(start with ..)' do |dir|
-				options[srcroot:dir]
-			end
-			opts.on '-h', '--help', 'show this help' do
-				puts opts
-				exit
-			end
-			opts.on '-v', '--version', 'show version' do
-				puts 'rmk 0.1.0', ''
-				exit
-			end
-		}.parse(argv)
-		srcroot, outroot = options[:srcroot], options[:outroot]
+	# @param srcroot [String] source root dir,can be absolute or relative to output root(start with ..)
+	# @param outroot [String] output root dir,can be absolute or relative to pwd,default pwd
+	def initialize(srcroot:'', outroot:'')
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
 		raise "source path '#{@srcroot}' not exist or not directory" unless ::Dir.exist?(@srcroot)
 		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
@@ -585,3 +565,25 @@ class Rmk::VDir
 	# @note not ready
 	def join_threads; end
 end
+
+options = {outroot:'_Build', srcroot:'..'}
+targets = OptionParser.new{ |opts|
+	opts.summary_width = 48
+	opts.banner = 'Usage£ºrmk [Options] [targets]'
+	opts.separator ''
+	opts.on '-C', '--directory=dir', 'output root dir,can be absolute or relative to pwd,default _Build' do |dir|
+		options[outroot:dir]
+	end
+	opts.on '-S', '--source=dir', 'source root dir,can be absolute or relative to output root(start with ..),default ..' do |dir|
+		options[srcroot:dir]
+	end
+	opts.on '-h', '--help', 'show this help' do
+		puts opts
+		exit
+	end
+	opts.on '-v', '--version', 'show version' do
+		puts 'rmk 0.1.0', ''
+		exit
+	end
+}.parse(argv)
+::Rmk.new(srcroot:options[:srcroot], outroot:options[:outroot]).build targets
