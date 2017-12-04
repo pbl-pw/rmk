@@ -22,17 +22,17 @@ class Rmk
 	end
 
 	# create Rmk object
-	# @param srcroot [String] source file root dir, can be absolute path or relative to outroot path(start with '../')
-	def initialize(srcroot, outroot = '', argv = ARGV)
+	# @param argv [Array<String>] parms list
+	def initialize(argv = ARGV)
 		options = {outroot:'', srcroot:''}
 		targets = OptionParser.new{ |opts|
 			opts.summary_width = 48
 			opts.banner = 'Usage£ºrmk [Options] [targets]'
 			opts.separator ''
-			opts.on '-C', '--directory=dir', 'output root dir(absolute or relative to pwd),default pwd' do |dir|
+			opts.on '-C', '--directory=dir', 'output root dir,can be absolute or relative to pwd),default pwd' do |dir|
 				options[outroot:dir]
 			end
-			opts.on '-S', '--source=dir', 'source root dir(absolute or relative to output root' do |dir|
+			opts.on '-S', '--source=dir', 'source root dir,can be absolute or relative to output root(start with ..)' do |dir|
 				options[srcroot:dir]
 			end
 			opts.on '-h', '--help', 'show this help' do
@@ -44,13 +44,14 @@ class Rmk
 				exit
 			end
 		}.parse(argv)
-		warn 'in-source build' if options[:srcroot].empty?
+		srcroot, outroot = options[:srcroot], options[:outroot]
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
-		raise "source path '#{@srcroot}' not exist or not directory" unless Dir.exist?(@srcroot) && ::File.directory?(@srcroot)
+		raise "source path '#{@srcroot}' not exist or not directory" unless ::Dir.exist?(@srcroot)
 		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
+		warn 'in-source build' if @outroot == @srcroot
 		@src_relative = srcroot.match?(/^\.\.[\\\/]/) && Rmk.normalize_path(srcroot)
-		@virtual_root = Rmk::Dir.new self, nil
-		::Dir.mkdir @outroot unless Dir.exist? @outroot
+		@virtual_root = Rmk::VDir.new self, nil
+		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		@srcfiles = {}
 		@outfiles = {}
 		@virtual_root.parse
@@ -83,7 +84,7 @@ class Rmk
 			files = []
 			# mutex lock if multithread
 			@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
-			Dir[pattern].each do |fn|
+			::Dir[pattern].each do |fn|
 				next if @outfiles.include? fn
 				next files << @srcfiles[fn] if @srcfiles.include? fn
 				files << (@srcfiles[fn] = VFile.new path:fn, is_src:true)
@@ -191,7 +192,7 @@ class Rmk::Build
 	attr_reader :vars
 
 	# create Build
-	# @param dir [Rmk::Dir] build's dir
+	# @param dir [Rmk::VDir] build's dir
 	# @param vars [Rmk::Vars] build's vars, setup outside becouse need preset some vars
 	# @param input [Array<Rmk::VFile>] input files
 	# @param implicit_input [String, nil] implicit input raw string
@@ -257,7 +258,7 @@ class Rmk::Build
 	end
 end
 
-class Rmk::Dir
+class Rmk::VDir
 	attr_reader :rmk, :abs_src_path, :abs_out_path
 	attr_reader :srcfiles, :outfiles, :builds
 	attr_reader :vars, :rules, :subdirs
@@ -266,7 +267,7 @@ class Rmk::Dir
 
 	# create virtual dir
 	# @param rmk [Rmk] Rmk obj
-	# @param parent [Rmk::Dir, nil] parent virtual dir, or nil for root
+	# @param parent [Rmk::VDir, nil] parent virtual dir, or nil for root
 	# @param path [String] path relative to parent, or empty for root
 	def initialize(rmk, parent, path = '')
 		@rmk = rmk
@@ -284,7 +285,7 @@ class Rmk::Dir
 
 	def include_subdir(path)
 		return @subdirs[path] if @subdirs.include? path
-		dir = @subdirs[path] = Rmk::Dir.new @rmk, self, path
+		dir = @subdirs[path] = Rmk::VDir.new @rmk, self, path
 		dir.defaultfile = @defaultfile
 		dir
 	end
@@ -327,7 +328,7 @@ class Rmk::Dir
 	# @param pattern [String] virtual path, can include '*' to match any char at last no dir part
 	# @return [Array<Hash>]
 	protected def find_srcfiles_imp(pattern)
-		Dir[join_abs_src_path pattern].map! do |fn|
+		::Dir[join_abs_src_path pattern].map! do |fn|
 			next @srcfiles[fn] if @srcfiles.include? fn
 			@srcfiles[fn] = VFile.new path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1], is_src: true
 		end
