@@ -24,8 +24,8 @@ class Rmk::VDir
 		@outfiles = {}
 		@builds = []
 		@virtual_path = parent&.join_virtual_path path
-		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path, ''
-		@abs_out_path = ::File.join @rmk.outroot, @virtual_path, ''
+		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path.to_s, ''
+		@abs_out_path = ::File.join @rmk.outroot, @virtual_path.to_s, ''
 	end
 
 	def include_subdir(path)

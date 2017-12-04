@@ -29,12 +29,11 @@ class Rmk
 		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
 		warn 'in-source build' if @outroot == @srcroot
 		@src_relative = srcroot.match?(/^\.\.[\\\/]/) && Rmk.normalize_path(srcroot)
-		@virtual_root = Rmk::VDir.new self, nil
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		@srcfiles = {}
 		@outfiles = {}
+		@virtual_root = Rmk::VDir.new self, nil
 		@virtual_root.parse
-		build *targets
 	end
 	attr_reader :srcroot, :outroot, :src_relative, :virtual_root, :srcfiles, :outfiles
 

@@ -23,7 +23,7 @@ class Rmk::Build
 		@vars['in'] = @infiles.map do |file|
 			file.input_ref_builds << self
 			next file.vpath unless file.src?
-			file.vpath ? @dir.rmk.join_rto_src_path file.vpath : file.path
+			file.vpath ? @dir.rmk.join_rto_src_path(file.vpath) : file.path
 		end.join ' '
 		if @infiles.size == 1 && @infiles[0].vpath
 			vpath = @infiles[0].vpath
