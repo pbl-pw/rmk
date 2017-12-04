@@ -169,6 +169,7 @@ class Rmk::Build
 		end
 		Rmk.split_parms(@vars.preprocess_str output).each &regout
 		@vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
+		@vars['out_noext'] = @vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
 		Rmk.split_parms(@vars.preprocess_str implicit_output).each &regout if implicit_output
 	end
 
