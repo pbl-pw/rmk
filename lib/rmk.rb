@@ -1,4 +1,5 @@
 require 'rmk/version'
+require 'optparse'
 
 class Rmk
 	# normalize path, drive letter upcase and path seperator set to '/'
@@ -22,8 +23,30 @@ class Rmk
 
 	# create Rmk object
 	# @param srcroot [String] source file root dir, can be absolute path or relative to outroot path(start with '../')
-	def initialize(srcroot, outroot = '')
+	def initialize(srcroot, outroot = '', argv = ARGV)
+		options = {outroot:'', srcroot:''}
+		targets = OptionParser.new{ |opts|
+			opts.summary_width = 48
+			opts.banner = 'Usage£ºrmk [Options] [targets]'
+			opts.separator ''
+			opts.on '-C', '--directory=dir', 'output root dir(absolute or relative to pwd),default pwd' do |dir|
+				options[outroot:dir]
+			end
+			opts.on '-S', '--source=dir', 'source root dir(absolute or relative to output root' do |dir|
+				options[srcroot:dir]
+			end
+			opts.on '-h', '--help', 'show this help' do
+				puts opts
+				exit
+			end
+			opts.on '-v', '--version', 'show version' do
+				puts 'rmk 0.1.0', ''
+				exit
+			end
+		}.parse(argv)
+		warn 'in-source build' if options[:srcroot].empty?
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
+		raise "source path '#{@srcroot}' not exist or not directory" unless Dir.exist?(@srcroot) && ::File.directory?(@srcroot)
 		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
 		@src_relative = srcroot.match?(/^\.\.[\\\/]/) && Rmk.normalize_path(srcroot)
 		@virtual_root = Rmk::Dir.new self, nil
@@ -31,6 +54,7 @@ class Rmk
 		@srcfiles = {}
 		@outfiles = {}
 		@virtual_root.parse
+		build *targets
 	end
 	attr_reader :srcroot, :outroot, :src_relative, :virtual_root, :srcfiles, :outfiles
 
