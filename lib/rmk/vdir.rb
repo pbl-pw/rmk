@@ -49,7 +49,7 @@ class Rmk::VDir
 	# @return [Array(String, <Regex, nil>)] when pattern include '*', return [dir part, file match regex]
 	# ;otherwise return [origin pattern, nil]
 	def split_vpath_pattern(pattern)
-		match = /^((?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/.match pattern
+		match = /^((?:[^\/*]+\/)*)([^\/*]*)(?:\*([^\/*]*))?$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
 		dir, prefix, postfix = *match[1..3]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
@@ -189,8 +189,8 @@ class Rmk::VDir
 		while lid < lines.size
 			line, markid = '', lid
 			while lid < lines.size
-				break if lines[lid].sub!(/(?<!\$)((?:\$\$)*)#.*$/){$1}
-				break unless lines[lid].sub!(/(?<!\$)((?:\$\$)*)\$\n/m){$1}
+				break if lines[lid].sub!(/(?<!\$)(?:\$\$)*\K#.*$/, '')
+				break unless lines[lid].sub!(/(?<!\$)(?:\$\$)*\K\$\n/m, '')
 				line += lines[lid]
 				lid += 1
 			end

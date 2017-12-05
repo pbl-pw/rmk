@@ -13,9 +13,8 @@ class Rmk
 	def self.split_parms(line, sep = '\s+')
 		result = []
 		until line.empty?
-			head, match, line = line.partition /(?<!\$)((?:\$\$)*)#{sep}/
-			break result << head if match.empty?
-			result << head + $1 unless head.empty? && $1.empty?
+			head, _, line = line.partition /(?<!\$)(?:\$\$)*\K#{sep}/
+			result << head unless head.empty?
 		end
 		result
 	end
@@ -45,7 +44,7 @@ class Rmk
 	# @return [Array(String, <Regex, nil>)] when pattern include '*', return [dir part, file match regex]
 	# ;otherwise return [origin pattern, nil]
 	def split_path_pattern(pattern)
-		match = /^([a-zA-Z]:\/(?:[^\/\*]+\/)*)([^\/\*]*)(?:\*([^\/\*]*))?$/.match pattern
+		match = /^([a-zA-Z]:\/(?:[^\/*]+\/)*)([^\/*]*)(?:\*([^\/*]*))?$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
 		dir, prefix, postfix = *match[1..3]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
