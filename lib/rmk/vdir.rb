@@ -6,8 +6,7 @@ class Rmk::VDir
 	attr_reader :rmk, :abs_src_path, :abs_out_path
 	attr_reader :srcfiles, :outfiles, :builds
 	attr_reader :vars, :rules, :subdirs
-	attr_writer :defaultfile
-	protected :defaultfile=
+	attr_reader :defaultfile
 
 	# create virtual dir
 	# @param rmk [Rmk] Rmk obj
@@ -16,7 +15,7 @@ class Rmk::VDir
 	def initialize(rmk, parent, path = '')
 		@rmk = rmk
 		@parent = parent
-		@defaultfile = nil
+		@defaultfile = @parent&.defaultfile
 		@rules = {}
 		@subdirs = {}
 		@srcfiles = {}
@@ -32,10 +31,7 @@ class Rmk::VDir
 	end
 
 	def include_subdir(path)
-		return @subdirs[path] if @subdirs.include? path
-		dir = @subdirs[path] = Rmk::VDir.new @rmk, self, path
-		dir.defaultfile = @defaultfile
-		dir
+		@subdirs[path] ||= Rmk::VDir.new @rmk, self, path
 	end
 
 	def join_abs_src_path(file) ::File.join @abs_src_path, file end
