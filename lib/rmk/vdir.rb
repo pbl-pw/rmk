@@ -195,6 +195,7 @@ class Rmk::VDir
 				lid += 1
 			end
 			parse_line lid < lines.size ? line + lines[lid] : line, markid
+			lid += 1
 		end
 		@state = last_state
 	end
