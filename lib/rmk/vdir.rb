@@ -313,7 +313,7 @@ class Rmk::VDir
 				dirs = ::Dir[::File.join @abs_src_path, parm, '']
 				raise "subdir '#{parm}' doesn't exist" if dirs.empty? && !parm.match?(/(?<!\$)(?:\$\$)*\K\*/)
 				dirs.each do |dir|
-					dir = include_subdir dir.sub @abs_src_path, ''
+					dir = include_subdir dir[@abs_src_path.size .. -2]
 					new_thread {dir.parse}
 				end
 			end
