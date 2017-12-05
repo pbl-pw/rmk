@@ -309,7 +309,7 @@ class Rmk::VDir
 			parms.each do |parm|
 				parm = state[:vars].unescape_str parm
 				dirs = ::Dir[::File.join @abs_src_path, parm, '']
-				raise "#{lid}: subdir '#{parm}' doesn't exist" if dirs.empty?
+				raise "subdir '#{parm}' doesn't exist" if dirs.empty? && !parm.match?(/(?<!\$)(?:\$\$)*\K\*/)
 				dirs.each do |dir|
 					dir = include_subdir dir.sub @abs_src_path, ''
 					new_thread {dir.parse}
