@@ -1,5 +1,4 @@
 require_relative 'rmk'
-require_relative 'vars'
 require_relative 'vfile'
 require_relative 'build'
 
@@ -17,7 +16,6 @@ class Rmk::VDir
 	def initialize(rmk, parent, path = '')
 		@rmk = rmk
 		@defaultfile = nil
-		@vars = Rmk::Vars.new(nil)
 		@rules = {}
 		@subdirs = {}
 		@srcfiles = {}
@@ -26,6 +24,10 @@ class Rmk::VDir
 		@virtual_path = parent&.join_virtual_path path
 		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path.to_s, ''
 		@abs_out_path = ::File.join @rmk.outroot, @virtual_path.to_s, ''
+		@vars = Rmk::Vars.new @rmk.vars
+		@vars['vpath'] = @virtual_path || '.'
+		@vars['srcpath'] = @abs_src_path
+		@vars['outpath'] = @abs_out_path
 	end
 
 	def include_subdir(path)

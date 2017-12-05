@@ -1,6 +1,5 @@
 require_relative 'rmk'
 require_relative 'vdir'
-require_relative 'vars'
 require_relative 'vfile'
 
 class Rmk::Build

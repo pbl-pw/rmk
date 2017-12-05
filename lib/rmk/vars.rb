@@ -1,9 +1,9 @@
-require_relative 'rmk'
+class Rmk; end
 
 class Rmk::Vars
 	# create vars
 	# @param upstream [Rmk::Vars, nil] upstream vars for lookup var which current obj not include
-	def initialize(upstream, **presets) @upstream, @vars = upstream, presets end
+	def initialize(upstream) @upstream, @vars = upstream, {} end
 
 	def [](name) (@vars.include?(name) ? @vars[name] : @upstream&.[](name)).to_s end
 

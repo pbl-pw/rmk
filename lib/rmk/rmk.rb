@@ -1,4 +1,5 @@
 require 'rmk/version'
+require_relative 'vars'
 
 class Rmk
 	# normalize path, drive letter upcase and path seperator set to '/'
@@ -31,10 +32,14 @@ class Rmk
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		@srcfiles = {}
 		@outfiles = {}
+		@vars = Rmk::Vars.new nil
+		@vars['srcroot'] = @srcroot
+		@vars['outroot'] = @outroot
+		@vars['src_rto_root'] = @src_relative || @srcroot
 		@virtual_root = Rmk::VDir.new self, nil
 		@virtual_root.parse
 	end
-	attr_reader :srcroot, :outroot, :src_relative, :virtual_root, :srcfiles, :outfiles
+	attr_reader :srcroot, :outroot, :src_relative, :vars, :virtual_root, :srcfiles, :outfiles
 
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
@@ -112,7 +117,6 @@ class Rmk
 	def build(*tgts)
 	end
 
-	class Vars; end
 	class Rule < Vars
 		def vars; self end
 	end
