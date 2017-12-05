@@ -6,13 +6,13 @@ require "rmk"
 options = {outroot:'_Build', srcroot:'..'}
 targets = OptionParser.new{ |opts|
 	opts.summary_width = 48
-	opts.banner = 'Usage£ºrmk [Options] [targets]'
+	opts.banner = 'Usage: rmk [Options] [targets]'
 	opts.separator ''
 	opts.on '-C', '--directory=dir', 'output root dir,can be absolute or relative to pwd,default _Build' do |dir|
-		options[outroot:dir]
+		options[:outroot] = dir
 	end
 	opts.on '-S', '--source=dir', 'source root dir,can be absolute or relative to output root(start with ..),default ..' do |dir|
-		options[srcroot:dir]
+		options[:srcroot] = dir
 	end
 	opts.on '-h', '--help', 'show this help' do
 		puts opts

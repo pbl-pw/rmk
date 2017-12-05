@@ -178,7 +178,7 @@ class Rmk::VDir
 		elsif @defaultfile
 			parse_file @defaultfile
 		else
-			raise "dir parse error: '#{file}' doesn't exist and can't finded any 'default.mk'"
+			raise "dir parse error: '#{file}' doesn't exist and can't finded any 'default.rmk'"
 		end
 	end
 
