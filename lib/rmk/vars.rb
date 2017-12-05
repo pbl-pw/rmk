@@ -19,4 +19,7 @@ class Rmk::Vars
 
 	# preprocess str, and then unescape the result
 	def interpolate_str(str) unescape_str preprocess_str str end
+
+	# merge other vars's define
+	def merge!(oth) @vars.merge! oth.instance_variable_get(:@vars) end
 end

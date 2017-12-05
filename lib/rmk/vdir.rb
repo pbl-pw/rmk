@@ -15,13 +15,14 @@ class Rmk::VDir
 	# @param path [String] path relative to parent, or empty for root
 	def initialize(rmk, parent, path = '')
 		@rmk = rmk
+		@parent = parent
 		@defaultfile = nil
 		@rules = {}
 		@subdirs = {}
 		@srcfiles = {}
 		@outfiles = {}
 		@builds = []
-		@virtual_path = parent&.join_virtual_path path
+		@virtual_path = @parent&.join_virtual_path path
 		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path.to_s, ''
 		@abs_out_path = ::File.join @rmk.outroot, @virtual_path.to_s, ''
 		@vars = Rmk::Vars.new @rmk.vars
@@ -318,6 +319,11 @@ class Rmk::VDir
 				end
 			end
 			join_threads
+		when 'inherit'
+			begin_define_nonvar indent
+			raise 'syntax error' if line
+			@vars.merge! @parent.vars if @parent
+			@rules.merge! @parent.rules if @parent
 		else
 			match = /^=\s*(?<value>.*)$/.match line
 			raise 'syntax error' unless match
