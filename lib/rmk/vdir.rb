@@ -74,7 +74,7 @@ class Rmk::VDir
 	protected def find_srcfiles_imp(pattern)
 		::Dir[join_abs_src_path pattern].map! do |fn|
 			next @srcfiles[fn] if @srcfiles.include? fn
-			@srcfiles[fn] = VFile.new path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1], is_src: true
+			@srcfiles[fn] = Rmk::VFile.new path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1], is_src: true
 		end
 	end
 
@@ -108,7 +108,7 @@ class Rmk::VDir
 	# @return [VFile] virtual file object
 	def add_out_file(name)
 		name = @vars.unescape_str name
-		@outfiles[name] = @rmk.add_out_file VFile.new(path:join_abs_out_path(name), vpath:join_virtual_path(name))
+		@outfiles[name] = @rmk.add_out_file Rmk::VFile.new(path:join_abs_out_path(name), vpath:join_virtual_path(name))
 	end
 
 	private def begin_define_nonvar(indent)
@@ -141,7 +141,7 @@ class Rmk::VDir
 		end
 	end
 
-	def define_var(indent, name, value)
+	def define_var(indent, name, append, value)
 		last = @state[-1]
 		case last[:type]
 		when :AcceptVar		# rule or build context which can add var
@@ -161,7 +161,8 @@ class Rmk::VDir
 		else			# general context
 			raise 'invalid indent' unless indent == last[:indent]
 		end
-		last[:vars][name] = last[:vars].interpolate_str value
+		append ? last[:vars][name] += last[:vars].interpolate_str(value) :
+			last[:vars][name] = last[:vars].interpolate_str(value)
 	end
 
 	def parse
@@ -184,7 +185,7 @@ class Rmk::VDir
 	def parse_file(file)
 		last_state, @state = @state, [{indent:0, type:nil, condition:nil, vars:@vars}]
 		lines = IO.readlines file
-		lid = 0
+		markid = lid = 0
 		while lid < lines.size
 			line, markid = '', lid
 			while lid < lines.size
@@ -198,7 +199,7 @@ class Rmk::VDir
 		end
 		@state = last_state
 	rescue
-		$!.set_backtrace $!.backtrace.push "#{file}:#{lid + 1}:vpath'#{@virtual_path}'"
+		$!.set_backtrace $!.backtrace.push "#{file}:#{markid + 1}:vpath'#{@virtual_path}'"
 		raise
 	end
 
@@ -246,7 +247,8 @@ class Rmk::VDir
 			raise 'rule name or command invalid' unless match
 			state = begin_define_nonvar indent
 			raise "rule '#{match[:name]}' has been defined" if @rules.include? match[:name]
-			rule = @rules[match[:name]] = Rmk::Rule.new state[:vars], 'command'=>command
+			rule = @rules[match[:name]] = Rmk::Rule.new state[:vars]
+			rule['command'] = match[:command]
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:rule.vars}
 		when /^build(each)?$/
 			eachmode = Regexp.last_match 1
@@ -268,7 +270,7 @@ class Rmk::VDir
 					files, regex = find_inputfiles fn
 					files.each do |file|
 						nvars = Rmk::Vars.new vars
-						nvars[:in_stem] = file[:vpath][regex, 1] if regex
+						nvars[:in_stem] = file.vpath[regex, 1] if regex
 						@builds << Rmk::Build.new(self, nvars, [file], iparms[1], iparms[2], oparms[0], oparms[1])
 					end
 				end
@@ -324,9 +326,9 @@ class Rmk::VDir
 			@vars.merge! @parent.vars if @parent
 			@rules.merge! @parent.rules if @parent
 		else
-			match = /^=\s*(?<value>.*)$/.match line
+			match = /^(?:(?<append>\+=)|=)(?<value>.*)$/.match line
 			raise 'syntax error' unless match
-			define_var indent, firstword, match[:value]
+			define_var indent, firstword, match[:append], match[:value]
 		end
 	end
 
