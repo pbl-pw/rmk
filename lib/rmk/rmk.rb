@@ -108,6 +108,15 @@ class Rmk
 		# mutex unlock if multithread
 	end
 
+	# register a src file
+	# @param file [Rmk::VFile] virtual file object
+	# @return [Rmk::VFile] when file has exist, return exist,otherwise the new
+	def add_src_file(file)
+		# mutex lock if multithread
+		@outfiles[file.path] || (@srcfiles[file.path] ||= file)
+		# mutex unlock if multithread
+	end
+
 	# add default target
 	def add_default(*files)
 		# need implement
