@@ -74,7 +74,8 @@ class Rmk::VDir
 	protected def find_srcfiles_imp(pattern)
 		::Dir[join_abs_src_path pattern].map! do |fn|
 			next @srcfiles[fn] if @srcfiles.include? fn
-			@srcfiles[fn] = Rmk::VFile.new path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1], is_src: true
+			@srcfiles[fn] = Rmk::VFile.new path: fn, is_src: true,
+						       vname:fn[@abs_src_path.size .. -1], vpath:fn[@rmk.srcroot.size + 1 .. -1]
 		end
 	end
 
@@ -108,7 +109,8 @@ class Rmk::VDir
 	# @return [VFile] virtual file object
 	def add_out_file(name)
 		name = @vars.unescape_str name
-		@outfiles[name] = @rmk.add_out_file Rmk::VFile.new(path:join_abs_out_path(name), vpath:join_virtual_path(name))
+		@outfiles[name] = @rmk.add_out_file Rmk::VFile.new(vname:name,
+								path:join_abs_out_path(name), vpath:join_virtual_path(name))
 	end
 
 	private def begin_define_nonvar(indent)
@@ -270,7 +272,7 @@ class Rmk::VDir
 					files, regex = find_inputfiles fn
 					files.each do |file|
 						nvars = Rmk::Vars.new vars
-						nvars[:in_stem] = file.vpath[regex, 1] if regex
+						nvars['in_stem'] = (file.vname || file.path)[regex, 1] if regex
 						@builds << Rmk::Build.new(self, nvars, [file], iparms[1], iparms[2], oparms[0], oparms[1])
 					end
 				end

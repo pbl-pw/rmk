@@ -2,7 +2,7 @@ require_relative 'rmk'
 
 # virtual file which represent a real OS file
 class Rmk::VFile
-	attr_reader :path, :vpath
+	attr_reader :path, :vname, :vpath
 	attr_accessor :is_src
 
 	def src?; @is_src end
@@ -16,8 +16,9 @@ class Rmk::VFile
 	# builds which include this file as output file
 	def output_ref_builds; @obuilds end
 
-	def initialize(path:, vpath:nil, is_src:false)
-		@path, @vpath, @is_src = path, vpath, is_src
+	def initialize(path:, vname:nil, vpath:nil, is_src:false)
+		raise 'virtual file must set vpath' if vname && !vpath
+		@path, @vname, @vpath, @is_src = path, vname, vpath, is_src
 		@ibuilds = []
 		@obuilds, @odbuilds = [], [] unless is_src
 	end

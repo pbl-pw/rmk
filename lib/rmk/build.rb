@@ -24,14 +24,13 @@ class Rmk::Build
 			next file.vpath unless file.src?
 			file.vpath ? @dir.rmk.join_rto_src_path(file.vpath) : file.path
 		end.join ' '
-		if @infiles.size == 1 && @infiles[0].vpath
-			vpath = @infiles[0].vpath
-			@vars['vin'] = vpath
-			match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vpath
-			@vars['vin_dir'], @vars['vin_nodir'] = match[1], match[2]
+		if @infiles.size == 1 && @infiles[0].vname
+			vname = @infiles[0].vname
+			match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vname
+			@vars['in_dir'], @vars['in_nodir'] = match[1], match[2]
 			match = /^(.*)\.(.*)$/.match match[2]
-			@vars['vin_base'], @vars['vin_ext'] = match[1], match[2]
-			@vars['vin_noext'] = @vars['vin_dir'] + @vars['vin_base']
+			@vars['in_base'], @vars['in_ext'] = match[1], match[2]
+			@vars['in_noext'] = @vars['in_dir'] + @vars['in_base']
 		end
 
 		Rmk.split_parms(@vars.preprocess_str implicit_input).each do |fn|
