@@ -197,6 +197,9 @@ class Rmk::VDir
 			lid += 1
 		end
 		@state = last_state
+	rescue
+		$!.set_backtrace $!.backtrace.push "#{file}:#{lid + 1}:vpath'#{@virtual_path}'"
+		raise
 	end
 
 	def parse_line(line, lid)
