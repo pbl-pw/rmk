@@ -37,7 +37,6 @@ class Rmk
 		@vars['outroot'] = @outroot
 		@vars['src_rto_root'] = @src_relative || @srcroot
 		@virtual_root = Rmk::VDir.new self, nil
-		@virtual_root.parse
 	end
 	attr_reader :srcroot, :outroot, :src_relative, :vars, :virtual_root, :srcfiles, :outfiles
 
@@ -112,6 +111,13 @@ class Rmk
 	# add default target
 	def add_default(*files)
 		# need implement
+	end
+
+	# parse project
+	# @return [self]
+	def parse
+		@virtual_root.parse
+		self
 	end
 
 	def build(*tgts)
