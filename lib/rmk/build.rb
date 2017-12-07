@@ -5,7 +5,6 @@ require_relative 'vfile'
 class Rmk::Build
 	attr_reader :dir
 	attr_reader :infiles, :orderfiles, :outfiles
-	attr_reader :vars_we
 
 	# create Build
 	# @param dir [Rmk::VDir] build's dir
@@ -19,7 +18,7 @@ class Rmk::Build
 	def initialize(dir, rule, vars, input, implicit_input, order_only_input, output, implicit_output, stem:nil)
 		@dir = dir
 		@rule = rule
-		@vars_we = vars		# outside writeable vars
+		@vars_we = Rmk::Vars.new vars		# outside writeable vars
 		@vars = Rmk::Vars.new @vars_we	#
 		@infiles = input
 
@@ -67,6 +66,8 @@ class Rmk::Build
 		Rmk.split_parms(@vars.preprocess_str implicit_output).each &regout if implicit_output
 		@vars.freeze
 	end
+
+	def vars; @vars.upstream_writer end
 
 	def run
 		cmd = @vars['command']

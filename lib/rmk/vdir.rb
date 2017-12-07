@@ -157,10 +157,6 @@ class Rmk::VDir
 				last = @state[-1]
 				raise 'invalid indent' unless indent == last[:indent]
 			end
-			return append ? last[:vars][name] += value : last[:vars][name] = value
-		when :SubVar
-			raise 'invalid indent' unless indent == last[:indent]
-			return append ? last[:vars][name] += value : last[:vars][name] = value
 		when :Condition	# just after condition context
 			raise 'invalid indent' unless indent > last[:indent]
 			@state << {indent:indent, type:nil, condition:last[:condition], vars:last[:vars]}
@@ -168,8 +164,7 @@ class Rmk::VDir
 		else			# general context
 			raise 'invalid indent' unless indent == last[:indent]
 		end
-		append ? last[:vars][name] += last[:vars].interpolate_str(value) :
-			last[:vars][name] = last[:vars].interpolate_str(value)
+		last[:vars][name, append] = value
 	end
 
 	def parse
@@ -274,19 +269,23 @@ class Rmk::VDir
 			end
 			iparms[0] = Rmk.split_parms(state[:vars].preprocess_str iparms[0]).map!{|fn| state[:vars].unescape_str fn}
 			raise 'must have input file' if iparms[0].size == 0
-			vars = Rmk::Vars.new state[:vars]
 			if eachmode
+				vars = Rmk::MultiVarWriter.new
 				iparms[0].each do |fn|
 					files, regex = find_inputfiles fn
 					files.each do |file|
-						@builds << Rmk::Build.new(self, @rules[match[:rule]], vars, [file], iparms[1],
+						build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], [file], iparms[1],
 							iparms[2], oparms[0], oparms[1], stem:regex && (file.vname || file.path)[regex, 1])
+						@builds << build
+						vars << build.vars
 					end
 				end
 			else
 				files = []
 				iparms[0].each {|fn| files.concat find_inputfiles(fn)[0]}
-				@builds << Rmk::Build.new(self, @rules[match[:rule]], vars, files, iparms[1], iparms[2], oparms[0], oparms[1])
+				build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], files, iparms[1], iparms[2], oparms[0], oparms[1])
+				@builds << builds
+				vars = build.vars
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'

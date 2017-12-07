@@ -13,7 +13,5 @@ class Rmk::Rule < Rmk::Vars
 
 	def each(&cmd) @vars.each &cmd end
 
-	def interpolate_str(str) str end
-	def preprocess_str(str) str end
-	def unescape_str(str) str end
+	def []=(name, append = false, value) @vars[name] = append ? self[name] + value : value end
 end

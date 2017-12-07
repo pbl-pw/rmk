@@ -7,7 +7,10 @@ class Rmk::Vars
 
 	def [](name) (@vars.include?(name) ? @vars[name] : @upstream&.[](name)).to_s end
 
-	def []=(name, value) @vars[name] = value end
+	def []=(name, append = false, value)
+		value = interpolate_str value
+		@vars[name] = append ? self[name] + value : value
+	end
 
 	def include?(name) @vars.include?(name) || @upstream&.include?(name) end
 
@@ -24,4 +27,34 @@ class Rmk::Vars
 	def merge!(oth) @vars.merge! oth.instance_variable_get(:@vars) end
 
 	def freeze; @vars.freeze; super end
+
+	class UpstreamWriter < self
+		def initialize(upstream, vars) super upstream; @vars = vars end
+
+		def []=(name, append = false, value)
+			value = interpolate_str value
+			@upstream[name] = append ? self[name] + value : value
+		end
+
+		# merge other vars's define
+		def merge!(oth) end
+
+		def freeze; end
+	end
+
+	def upstream_writer; UpstreamWriter.new @upstream, @vars end
+end
+
+class Rmk::MultiVarWriter
+	def initialize
+		@vars = []
+	end
+
+	# add vars
+	# @param vars [Rmk::Vars] vars obj
+	def <<(vars) @vars << vars end
+
+	def []=(name, append = false, value)
+		@vars.each{|var| var[name, append] = value}
+	end
 end
