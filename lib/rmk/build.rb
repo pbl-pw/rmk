@@ -5,20 +5,24 @@ require_relative 'vfile'
 class Rmk::Build
 	attr_reader :dir
 	attr_reader :infiles, :orderfiles, :outfiles
-	attr_reader :vars
+	attr_reader :vars_we
 
 	# create Build
 	# @param dir [Rmk::VDir] build's dir
-	# @param vars [Rmk::Vars] build's vars, setup outside becouse need preset some vars
+	# @param rule [Rmk::Rule] build's rule
+	# @param vars [Rmk::Vars] upstream vars
 	# @param input [Array<Rmk::VFile>] input files
 	# @param implicit_input [String, nil] implicit input raw string
 	# @param order_only_input [String, nil] order-only input raw string
 	# @param output [String, nil] output raw string
 	# @param implicit_output [String, nil] implicit output raw string
-	def initialize(dir, vars, input, implicit_input, order_only_input, output, implicit_output)
+	def initialize(dir, rule, vars, input, implicit_input, order_only_input, output, implicit_output, stem:nil)
 		@dir = dir
-		@vars = vars
+		@rule = rule
+		@vars_we = vars		# outside writeable vars
+		@vars = Rmk::Vars.new @vars_we	#
 		@infiles = input
+
 		@vars['in'] = @infiles.map do |file|
 			file.input_ref_builds << self
 			next file.vpath unless file.src?
@@ -32,6 +36,8 @@ class Rmk::Build
 			@vars['in_base'], @vars['in_ext'] = match[1], match[2]
 			@vars['in_noext'] = @vars['in_dir'] + @vars['in_base']
 		end
+		@vars['stem'] = stem if stem
+		@rule.vars.each {|name, str| @vars_we[name] = @vars.interpolate_str str}	# interpolate rule's vars to self
 
 		Rmk.split_parms(@vars.preprocess_str implicit_input).each do |fn|
 			fn = @vars.unescape_str fn
@@ -58,6 +64,7 @@ class Rmk::Build
 		@vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
 		@vars['out_noext'] = @vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
 		Rmk.split_parms(@vars.preprocess_str implicit_output).each &regout if implicit_output
+		@vars.freeze
 	end
 
 	def run

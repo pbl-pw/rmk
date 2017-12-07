@@ -1,5 +1,6 @@
 require_relative 'rmk'
 require_relative 'vfile'
+require_relative 'rule'
 require_relative 'build'
 
 class Rmk::VDir
@@ -156,6 +157,7 @@ class Rmk::VDir
 				last = @state[-1]
 				raise 'invalid indent' unless indent == last[:indent]
 			end
+			return append ? last[:vars][name] += value : last[:vars][name] = value
 		when :Condition	# just after condition context
 			raise 'invalid indent' unless indent > last[:indent]
 			@state << {indent:indent, type:nil, condition:last[:condition], vars:last[:vars]}
@@ -249,8 +251,7 @@ class Rmk::VDir
 			raise 'rule name or command invalid' unless match
 			state = begin_define_nonvar indent
 			raise "rule '#{match[:name]}' has been defined" if @rules.include? match[:name]
-			rule = @rules[match[:name]] = Rmk::Rule.new state[:vars]
-			rule['command'] = match[:command]
+			rule = @rules[match[:name]] = Rmk::Rule.new state[:vars], command:match[:command]
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:rule.vars}
 		when /^build(each)?$/
 			eachmode = Regexp.last_match 1
@@ -259,27 +260,30 @@ class Rmk::VDir
 			raise 'syntax error' unless match
 			raise "rule '#{match[:rule]}' undefined" unless @rules.include? match[:rule]
 			parms = Rmk.split_parms match[:parms], '>>'
-			raise "must have '>>' separator for separat input and output" unless parms.size == 2
+			raise "must have '>>' separator for separat input and output" unless (1 .. 2) === parms.size
 			iparms = Rmk.split_parms parms[0], '&'
 			raise 'input syntax error' unless (1..3) === iparms.size
-			oparms = Rmk.split_parms parms[1], '&'
-			raise 'output syntax error' unless (1..2) === oparms.size
+			if parms[1]
+				oparms = Rmk.split_parms parms[1], '&'
+				raise 'output syntax error' unless (1..2) === oparms.size
+			else
+				oparms = []
+			end
 			iparms[0] = Rmk.split_parms(state[:vars].preprocess_str iparms[0]).map!{|fn| state[:vars].unescape_str fn}
 			raise 'must have input file' if iparms[0].size == 0
-			vars = Rmk::Vars.new @rules[match[:rule]].vars
+			vars = Rmk::Vars.new state[:vars]
 			if eachmode
 				iparms[0].each do |fn|
 					files, regex = find_inputfiles fn
 					files.each do |file|
-						nvars = Rmk::Vars.new vars
-						nvars['in_stem'] = (file.vname || file.path)[regex, 1] if regex
-						@builds << Rmk::Build.new(self, nvars, [file], iparms[1], iparms[2], oparms[0], oparms[1])
+						@builds << Rmk::Build.new(self, match[:rule], vars, [file], iparms[1],
+							iparms[2], oparms[0], oparms[1], stem:regex && (file.vname || file.path)[regex, 1])
 					end
 				end
 			else
 				files = []
 				iparms[0].each {|fn| files.concat find_inputfiles(fn)[0]}
-				@builds << Rmk::Build.new(self, Rmk::Vars.new(vars), files, iparms[1], iparms[2], oparms[0], oparms[1])
+				@builds << Rmk::Build.new(self, match[:rule], vars, files, iparms[1], iparms[2], oparms[0], oparms[1])
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'

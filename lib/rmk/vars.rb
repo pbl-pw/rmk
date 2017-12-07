@@ -22,4 +22,6 @@ class Rmk::Vars
 
 	# merge other vars's define
 	def merge!(oth) @vars.merge! oth.instance_variable_get(:@vars) end
+
+	def freeze; @vars.freeze; super end
 end

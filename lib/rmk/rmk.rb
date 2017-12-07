@@ -132,8 +132,6 @@ class Rmk
 	def build(*tgts)
 	end
 
-	class Rule < Vars
-		def vars; self end
-	end
+	class Rule < Vars; end
 	class VFile; end
 end
