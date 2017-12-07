@@ -1,18 +1,19 @@
 class Rmk; end
 
-class Rmk::Vars
+class Rmk::Vars < Hash
 	# create vars
 	# @param upstream [Rmk::Vars, nil] upstream vars for lookup var which current obj not include
-	def initialize(upstream) @upstream, @vars = upstream, {} end
+	def initialize(upstream) @upstream = upstream end
+	attr_reader :upstream
 
-	def [](name) (@vars.include?(name) ? @vars[name] : @upstream&.[](name)).to_s end
+	def [](name) (include?(name) ? super(name) : @upstream&.[](name)).to_s end
 
 	def []=(name, append = false, value)
-		value = interpolate_str value
-		@vars[name] = append ? self[name] + value : value
+		value = interpolate_str value.to_s
+		super name, append ? self[name] + value : value
 	end
 
-	def include?(name) @vars.include?(name) || @upstream&.include?(name) end
+	def include?(name) super(name) || @upstream&.include?(name) end
 
 	# only do #{\w+} interpolate
 	def preprocess_str(str) str.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{self[$2]}"} end
@@ -23,38 +24,32 @@ class Rmk::Vars
 	# preprocess str, and then unescape the result
 	def interpolate_str(str) unescape_str preprocess_str str end
 
-	# merge other vars's define
-	def merge!(oth) @vars.merge! oth.instance_variable_get(:@vars) end
+	class UpstreamWriter
+		def initialize(upstream, vars) @upstream, @vars = upstream, vars end
 
-	def freeze; @vars.freeze; super end
-
-	class UpstreamWriter < self
-		def initialize(upstream, vars) super upstream; @vars = vars end
+		def [](name) (@vars.include?(name) ? @vars[name] : @upstream&.[](name)).to_s end
 
 		def []=(name, append = false, value)
-			value = interpolate_str value
-			@upstream[name] = append ? self[name] + value : value
+			value = @vars.interpolate_str value
+			@upstream.store name, append ? self[name] + value : value
 		end
-
-		# merge other vars's define
-		def merge!(oth) end
-
-		def freeze; end
 	end
 
-	def upstream_writer; UpstreamWriter.new @upstream, @vars end
+	def upstream_writer; UpstreamWriter.new @upstream, self end
 end
 
 class Rmk::MultiVarWriter
-	def initialize
-		@vars = []
-	end
+	# create
+	# @param vars [Array<Rmk::Vars>] init Vars obj array
+	def initialize(*vars) @vars = vars end
 
-	# add vars
+	# add vars obj to array
 	# @param vars [Rmk::Vars] vars obj
 	def <<(vars) @vars << vars end
 
-	def []=(name, append = false, value)
-		@vars.each{|var| var[name, append] = value}
-	end
+	# write var to all vars obj
+	# @param name [String]
+	# @param append [Boolean] is '+=' mode ?
+	# @param value [String, nil]
+	def []=(name, append = false, value) @vars.each{|var| var[name, append] = value} end
 end

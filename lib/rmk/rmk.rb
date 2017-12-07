@@ -32,10 +32,7 @@ class Rmk
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		@srcfiles = {}
 		@outfiles = {}
-		@vars = Rmk::Vars.new nil
-		@vars['srcroot'] = @srcroot
-		@vars['outroot'] = @outroot
-		@vars['src_rto_root'] = @src_relative || @srcroot
+		@vars = {'srcroot'=>@srcroot, 'outroot'=>@outroot, 'src_rto_root'=>@src_relative || @srcroot}
 		@virtual_root = Rmk::VDir.new self, nil
 	end
 	attr_reader :srcroot, :outroot, :src_relative, :vars, :virtual_root, :srcfiles, :outfiles

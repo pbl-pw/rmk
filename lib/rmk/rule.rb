@@ -11,7 +11,5 @@ class Rmk::Rule < Rmk::Vars
 
 	def vars; self end
 
-	def each(&cmd) @vars.each &cmd end
-
-	def []=(name, append = false, value) @vars[name] = append ? self[name] + value : value end
+	def []=(name, append = false, value) store name, append ? self[name] + value : value end
 end
