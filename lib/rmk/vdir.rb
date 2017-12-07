@@ -284,7 +284,7 @@ class Rmk::VDir
 				files = []
 				iparms[0].each {|fn| files.concat find_inputfiles(fn)[0]}
 				build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], files, iparms[1], iparms[2], oparms[0], oparms[1])
-				@builds << builds
+				@builds << build
 				vars = build.vars
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
