@@ -37,7 +37,6 @@ class Rmk::Build
 			@vars['in_noext'] = @vars['in_dir'] + @vars['in_base']
 		end
 		@vars['stem'] = stem if stem
-		@rule.vars.each {|name, str| @vars_we[name] = @vars.interpolate_str str}	# interpolate rule's vars to self
 
 		Rmk.split_parms(@vars.preprocess_str implicit_input).each do |fn|
 			fn = @vars.unescape_str fn
@@ -60,9 +59,11 @@ class Rmk::Build
 			file.output_ref_builds << self
 			@outfiles << file
 		end
+		output = @rule['out'] || raise('must have output') unless output
 		Rmk.split_parms(@vars.preprocess_str output).each &regout
 		@vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
 		@vars['out_noext'] = @vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
+		@rule.vars.each {|name, str| @vars_we[name] = @vars.interpolate_str str}	# interpolate rule's vars to self
 		Rmk.split_parms(@vars.preprocess_str implicit_output).each &regout if implicit_output
 		@vars.freeze
 	end

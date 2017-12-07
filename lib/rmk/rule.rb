@@ -10,4 +10,10 @@ class Rmk::Rule < Rmk::Vars
 	attr_reader :command
 
 	def vars; self end
+
+	def each(&cmd) @vars.each &cmd end
+
+	def interpolate_str(str) str end
+	def preprocess_str(str) str end
+	def unescape_str(str) str end
 end

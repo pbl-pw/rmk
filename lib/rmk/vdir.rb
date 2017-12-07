@@ -158,6 +158,9 @@ class Rmk::VDir
 				raise 'invalid indent' unless indent == last[:indent]
 			end
 			return append ? last[:vars][name] += value : last[:vars][name] = value
+		when :SubVar
+			raise 'invalid indent' unless indent == last[:indent]
+			return append ? last[:vars][name] += value : last[:vars][name] = value
 		when :Condition	# just after condition context
 			raise 'invalid indent' unless indent > last[:indent]
 			@state << {indent:indent, type:nil, condition:last[:condition], vars:last[:vars]}
@@ -276,14 +279,14 @@ class Rmk::VDir
 				iparms[0].each do |fn|
 					files, regex = find_inputfiles fn
 					files.each do |file|
-						@builds << Rmk::Build.new(self, match[:rule], vars, [file], iparms[1],
+						@builds << Rmk::Build.new(self, @rules[match[:rule]], vars, [file], iparms[1],
 							iparms[2], oparms[0], oparms[1], stem:regex && (file.vname || file.path)[regex, 1])
 					end
 				end
 			else
 				files = []
 				iparms[0].each {|fn| files.concat find_inputfiles(fn)[0]}
-				@builds << Rmk::Build.new(self, match[:rule], vars, files, iparms[1], iparms[2], oparms[0], oparms[1])
+				@builds << Rmk::Build.new(self, @rules[match[:rule]], vars, files, iparms[1], iparms[2], oparms[0], oparms[1])
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'
