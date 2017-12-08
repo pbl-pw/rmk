@@ -24,6 +24,12 @@ class Rmk
 	# @param srcroot [String] source root dir,can be absolute or relative to output root(start with ..)
 	# @param outroot [String] output root dir,can be absolute or relative to pwd,default pwd
 	def initialize(srcroot:'', outroot:'')
+		Thread.abort_on_exception = true
+		@thread_run_mutex = Thread::Mutex.new
+		@waitting_threads = []
+		@running_threads_cnt = 1
+		@files_mutex = Thread::Mutex.new	# files operate mutex
+
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
 		raise "source path '#{@srcroot}' not exist or not directory" unless ::Dir.exist?(@srcroot)
 		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
@@ -60,22 +66,22 @@ class Rmk
 		path, regex = split_path_pattern pattern
 		if regex
 			files = []
-			# mutex lock if multithread
-			@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
-			::Dir[pattern].each do |fn|
-				next if @outfiles.include? fn
-				next files << @srcfiles[fn] if @srcfiles.include? fn
-				files << (@srcfiles[fn] = VFile.new path:fn, is_src:true)
+			@files_mutex.synchronize do
+				@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
+				::Dir[pattern].each do |fn|
+					next if @outfiles.include? fn
+					next files << @srcfiles[fn] if @srcfiles.include? fn
+					files << (@srcfiles[fn] = VFile.new path:fn, is_src:true)
+				end
 			end
-			# mutex unlock if multithread
 			return files, regex
 		else
-			# mutex lock if multithread
-			return [@outfiles[path]], nil if @outfiles.include? path
-			return [@srcfiles[path]], nil if @srcfiles.include? path
-			raise "file '#{path}' not exist" unless ::File.exist? path
-			file = @srcfiles[path] = VFile.new path:path, is_src:true
-			# mutex unlock if multithread
+			file = @files_mutex.synchronize do
+				next @outfiles[path] if @outfiles.include? path
+				next @srcfiles[path] if @srcfiles.include? path
+				raise "file '#{path}' not exist" unless ::File.exist? path
+				@srcfiles[path] = VFile.new path:path, is_src:true
+			end
 			return [file], nil
 		end
 	end
@@ -86,11 +92,11 @@ class Rmk
 	def find_outfiles(pattern)
 		pattern = Rmk.normalize_path pattern
 		path, regex = split_path_pattern pattern
-		return @outfiles.include?(path) ? [@outfiles[path]] : [] unless regex
 		files = []
-		# mutex lock if multithread
-		@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
-		# mutex unlock if multithread
+		@files_mutex.synchronize do
+			next @outfiles.include?(path) ? [@outfiles[path]] : files unless regex
+			@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
+		end
 		files
 	end
 
@@ -98,20 +104,20 @@ class Rmk
 	# @param file [Rmk::VFile] virtual file object
 	# @return [Rmk::VFile] return file obj back
 	def add_out_file(file)
-		raise "file '#{file.path}' has been defined" if @outfiles.include? file.path
-		# mutex lock if multithread
-		@srcfiles.delete file.path if @srcfiles.include? file.path
-		@outfiles[file.path] = file
-		# mutex unlock if multithread
+		@files_mutex.synchronize do
+			raise "file '#{file.path}' has been defined" if @outfiles.include? file.path
+			@srcfiles.delete file.path if @srcfiles.include? file.path
+			@outfiles[file.path] = file
+		end
 	end
 
 	# register a src file
 	# @param file [Rmk::VFile] virtual file object
 	# @return [Rmk::VFile] when file has exist, return exist,otherwise the new
 	def add_src_file(file)
-		# mutex lock if multithread
-		@outfiles[file.path] || (@srcfiles[file.path] ||= file)
-		# mutex unlock if multithread
+		@files_mutex.synchronize do
+			@outfiles[file.path] || (@srcfiles[file.path] ||= file)
+		end
 	end
 
 	# add default target
@@ -129,7 +135,23 @@ class Rmk
 	def build(*tgts)
 	end
 
-	def new_thread(&cmd) Thread.new &cmd end
+	def new_thread!(&cmd) Thread.new cmd, &method(:default_thread_body) end
+
+	private def default_thread_body(cmd)
+		Thread.stop unless @thread_run_mutex.synchronize do
+			next @running_threads_cnt += 1 unless @running_threads_cnt >= 8
+			@waitting_threads << Thread.current
+			false
+		end
+		cmd.call
+		@thread_run_mutex.synchronize do
+			if @waitting_threads.empty?
+				@running_threads_cnt -= 1 unless @running_threads_cnt <= 0
+			else
+				@waitting_threads.shift.run
+			end
+		end
+	end
 
 	class Rule < Vars; end
 	class VFile; end

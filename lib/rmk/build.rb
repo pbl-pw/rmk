@@ -17,6 +17,9 @@ class Rmk::Build
 	# @param implicit_output [String, nil] implicit output raw string
 	def initialize(dir, rule, vars, input, implicit_input, order_only_input, output, implicit_output, stem:nil)
 		@mutex = Thread::Mutex.new
+		@updatedcnt = 0		# input file updated count
+		@runed = false			# build has been runed
+
 		@dir = dir
 		@rule = rule
 		@vars_we = Rmk::Vars.new vars		# outside writeable vars
@@ -72,13 +75,12 @@ class Rmk::Build
 
 	def input_updated!
 		return if @runed
-		@mutex.lock
-		@updatedcnt ||= 0
-		@updatedcnt += 1
-		needrun = @updatedcnt >= @infiles.size + @orderfiles.size
-		@runed = true if needrun
-		@mutex.unlock
-		@dir.rmk.new_thread &run if needrun
+		@dir.rmk.new_thread! &method(:run) if @mutex.synchronize do
+			@updatedcnt += 1
+			needrun = @updatedcnt >= @infiles.size + @orderfiles.size
+			@runed = true if needrun
+			needrun
+		end
 	end
 
 	private def run

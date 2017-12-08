@@ -318,16 +318,17 @@ class Rmk::VDir
 			state = begin_define_nonvar indent
 			parms = Rmk.split_parms state[:vars].preprocess_str line
 			raise "#{lid}; must have dir name or matcher" if parms.empty?
+			threads = []
 			parms.each do |parm|
 				parm = state[:vars].unescape_str parm
 				dirs = ::Dir[::File.join @abs_src_path, parm, '']
 				raise "subdir '#{parm}' doesn't exist" if dirs.empty? && !parm.match?(/(?<!\$)(?:\$\$)*\K\*/)
 				dirs.each do |dir|
 					dir = include_subdir dir[@abs_src_path.size .. -2]
-					new_thread {dir.parse}
+					threads << @rmk.new_thread!( &dir.method(:parse) )
 				end
 			end
-			join_threads
+			threads.each{|thr| thr.join}
 		when 'inherit'
 			begin_define_nonvar indent
 			raise 'syntax error' if line
@@ -344,12 +345,4 @@ class Rmk::VDir
 			define_var indent, firstword, match[:append], match[:value]
 		end
 	end
-
-	# run in new thread
-	# @note not ready
-	def new_thread(&cmd) cmd.call end
-
-	# wait all threads
-	# @note not ready
-	def join_threads; end
 end
