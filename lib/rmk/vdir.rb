@@ -331,8 +331,13 @@ class Rmk::VDir
 		when 'inherit'
 			begin_define_nonvar indent
 			raise 'syntax error' if line
-			@vars.merge! @parent.vars if @parent
-			@rules.merge! @parent.rules if @parent
+			if @parent
+				@vars.merge! @parent.vars
+				@vars['vpath'] = @virtual_path || '.'
+				@vars['srcpath'] = @abs_src_path
+				@vars['outpath'] = @abs_out_path
+				@rules.merge! @parent.rules
+			end
 		else
 			match = /^(?:(?<append>\+=)|=)(?<value>.*)$/.match line
 			raise 'syntax error' unless match
