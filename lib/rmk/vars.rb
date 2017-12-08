@@ -6,14 +6,16 @@ class Rmk::Vars < Hash
 	def initialize(upstream) @upstream = upstream end
 	attr_reader :upstream
 
-	def [](name) (include?(name) ? super(name) : @upstream&.[](name)).to_s end
+	def [](name)  (super(name) || @upstream&.[](name)).to_s end
 
 	def []=(name, append = false, value)
 		value = interpolate_str value.to_s
 		super name, append ? self[name] + value : value
 	end
 
-	def include?(name) super(name) || @upstream&.include?(name) end
+	def include?(name, inherit = true) super(name) || inherit && @upstream&.include?(name) end
+
+	def keys(inherit = true) inherit && @upstream ? super() + @upstream.keys : super() end
 
 	# only do #{\w+} interpolate
 	def preprocess_str(str) str.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{self[$2]}"} end
