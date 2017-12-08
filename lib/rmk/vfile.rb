@@ -22,4 +22,6 @@ class Rmk::VFile
 		@ibuilds = []
 		@obuilds, @odbuilds = [], [] unless is_src
 	end
+
+	def updated!; input_ref_builds.each{|build| build.input_updated!} end
 end

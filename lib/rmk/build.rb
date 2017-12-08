@@ -16,6 +16,7 @@ class Rmk::Build
 	# @param output [String, nil] output raw string
 	# @param implicit_output [String, nil] implicit output raw string
 	def initialize(dir, rule, vars, input, implicit_input, order_only_input, output, implicit_output, stem:nil)
+		@mutex = Thread::Mutex.new
 		@dir = dir
 		@rule = rule
 		@vars_we = Rmk::Vars.new vars		# outside writeable vars
@@ -69,15 +70,22 @@ class Rmk::Build
 
 	def vars; @vars.upstream_writer end
 
-	def run
-		cmd = @vars['command']
-		unless cmd.empty?
-			cmd = cmd.gsub(/\$(?:(\$)|(\w+)|{(\w+)})/){case when $1 then $1 when $2 then @vars[$2] else @vars[$3] end}
-			result = system cmd
-		end
-		@outfiles.each do |f|
-			f.state = :updated
-			f.input_ref_builds&.each{|build| build.need_run!}
-		end if result
+	def input_updated!
+		return if @runed
+		@mutex.lock
+		@updatedcnt ||= 0
+		@updatedcnt += 1
+		needrun = @updatedcnt >= @infiles.size + @orderfiles.size
+		@runed = true if needrun
+		@mutex.unlock
+		@dir.rmk.new_thread &run if needrun
+	end
+
+	private def run
+		cmd = @vars.interpolate_str @vars['command'] || @rule.command
+		puts @vars['echo'] || cmd
+		result = cmd.empty? || (system cmd)
+		return $stderr.puts $? unless result
+		@outfiles.each {|file| file.updated!}
 	end
 end

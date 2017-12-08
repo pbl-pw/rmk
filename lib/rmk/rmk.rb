@@ -129,6 +129,8 @@ class Rmk
 	def build(*tgts)
 	end
 
+	def new_thread(&cmd) Thread.new &cmd end
+
 	class Rule < Vars; end
 	class VFile; end
 end
