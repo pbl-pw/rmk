@@ -23,6 +23,7 @@ class Rmk::VDir
 		@outfiles = {}
 		@builds = []
 		@virtual_path = @parent&.join_virtual_path path
+		Dir.mkdir @virtual_path if @virtual_path && !Dir.exist?(@virtual_path)
 		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path.to_s, ''
 		@abs_out_path = ::File.join @rmk.outroot, @virtual_path.to_s, ''
 		@vars = Rmk::Vars.new @rmk.vars
