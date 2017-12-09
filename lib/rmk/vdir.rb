@@ -207,7 +207,7 @@ class Rmk::VDir
 	end
 
 	def parse_line(line, lid)
-		match = /^(?<indent> *|\t*)(?:(?<firstword>\w+)(?:\s*|\s+(?<content>.*)))?$/.match line
+		match = /^(?<indent> *|\t*)(?:(?<firstword>\w+)\s*(?<content>.+)?)?$/.match line
 		raise 'syntax error' unless match
 		indent, firstword, line = match[:indent].size, match[:firstword], match[:content]
 		return end_last_define unless firstword
@@ -341,7 +341,7 @@ class Rmk::VDir
 				@rules.merge! @parent.rules
 			end
 		else
-			match = /^(?:(?<append>\+=)|=)(?<value>.*)$/.match line
+			match = /^(?:(?<append>\+=)|=)(?(<append>)|\s*)(?<value>.*)$/.match line
 			raise 'syntax error' unless match
 			define_var indent, firstword, match[:append], match[:value]
 		end
