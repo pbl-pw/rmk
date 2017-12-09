@@ -13,15 +13,19 @@ class Rmk::VFile
 	# builds which include this file as order-only file
 	def order_ref_builds; @odbuilds end
 
-	# builds which include this file as output file
-	def output_ref_builds; @obuilds end
+	# build which include this file as output file
+	attr_accessor :output_ref_build
 
 	def initialize(path:, vname:nil, vpath:nil, is_src:false)
 		raise 'virtual file must set vpath' if vname && !vpath
 		@path, @vname, @vpath, @is_src = path, vname, vpath, is_src
 		@ibuilds = []
-		@obuilds, @odbuilds = [], [] unless is_src
+		@output_ref_build, @odbuilds = [], [] unless is_src
 	end
 
 	def updated!; input_ref_builds.each{|build| build.input_updated!} end
+
+	def check_for_build
+		updated!
+	end
 end

@@ -6,11 +6,11 @@ class Rmk::Vars < Hash
 	def initialize(upstream) @upstream = upstream end
 	attr_reader :upstream
 
-	def [](name)  (super(name) || @upstream&.[](name)).to_s end
+	def [](name)  super(name) || @upstream&.[](name) end
 
 	def []=(name, append = false, value)
 		value = interpolate_str value.to_s
-		super name, append ? self[name] + value : value
+		super name, append ? self[name].to_s + value : value
 	end
 
 	def include?(name, inherit = true) super(name) || inherit && @upstream&.include?(name) end
@@ -29,11 +29,11 @@ class Rmk::Vars < Hash
 	class UpstreamWriter
 		def initialize(upstream, vars) @upstream, @vars = upstream, vars end
 
-		def [](name) (@vars.include?(name) ? @vars[name] : @upstream&.[](name)).to_s end
+		def [](name) @vars[name] end
 
 		def []=(name, append = false, value)
-			value = @vars.interpolate_str value
-			@upstream.store name, append ? self[name] + value : value
+			value = @vars.interpolate_str value.to_s
+			@upstream.store name, append ? self[name].to_s + value : value
 		end
 	end
 

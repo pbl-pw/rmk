@@ -1,6 +1,7 @@
 require_relative 'rmk'
 require_relative 'vdir'
 require_relative 'vfile'
+require 'open3'
 
 class Rmk::Build
 	attr_reader :dir
@@ -59,7 +60,7 @@ class Rmk::Build
 		@outfiles = []
 		regout = proc do |fn|
 			file = dir.add_out_file @vars.unescape_str fn
-			file.output_ref_builds << self
+			file.output_ref_build = self
 			@outfiles << file
 		end
 		output = @rule['out'] || raise('must have output') unless output
@@ -83,11 +84,24 @@ class Rmk::Build
 		end
 	end
 
+	@output_mutex = Thread::Mutex.new
+	def self.puts(*parms) @output_mutex.synchronize{$stdout.puts *parms} end
+	def self.err_puts(*parms) @output_mutex.synchronize{$stderr.puts *parms} end
+	def self.log_cmd_out(out, err)
+		@output_mutex.synchronize do
+			$stdout.puts out unless out.empty?
+			$stderr.puts err unless err.empty?
+		end
+	end
+
 	private def run
 		cmd = @vars.interpolate_str @vars['command'] || @rule.command
-		puts @vars['echo'] || cmd
-		result = cmd.empty? || (system cmd)
-		return $stderr.puts $? unless result
+		unless /^\s*$/.match? cmd
+			Rmk::Build.puts @vars['echo'] || cmd
+			result = system cmd
+			return Rmk::Build.err_puts "can't excute command\n" if result.nil?
+			return unless result
+		end
 		@outfiles.each {|file| file.updated!}
 	end
 end

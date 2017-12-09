@@ -36,8 +36,10 @@ class Rmk
 		warn 'in-source build' if @outroot == @srcroot
 		@src_relative = srcroot.match?(/^\.\.[\\\/]/) && Rmk.normalize_path(srcroot)
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
+		Dir.chdir @outroot
 		@srcfiles = {}
 		@outfiles = {}
+		@defaultfiles = []
 		@vars = {'srcroot'=>@srcroot, 'outroot'=>@outroot, 'src_rto_root'=>@src_relative || @srcroot}
 		@virtual_root = Rmk::VDir.new self, nil
 	end
@@ -121,9 +123,7 @@ class Rmk
 	end
 
 	# add default target
-	def add_default(*files)
-		# need implement
-	end
+	def add_default(*files) @files_mutex.synchronize{@defaultfiles.concat files} end
 
 	# parse project
 	# @return [self]
@@ -133,6 +133,36 @@ class Rmk
 	end
 
 	def build(*tgts)
+		if tgts.empty?
+			files = @defaultfiles
+		else
+			files = tgts.map do |name|
+				file = Rmk.normalize_path name
+				file = @outfiles[File.join @outroot, file] || @srcfiles[File.join @srcroot, file]
+				raise "build target '#{name}' not found" unless file
+				file = file.input_ref_builds[0].outfiles[0] if file.src? && file.input_ref_builds.size == 1
+				file
+			end
+		end
+		puts 'Rmk: build start'
+		if files.empty?
+			@srcfiles.each_value{|file| file.check_for_build}
+		else
+			checklist = []
+			checkproc = proc do |fi|
+				next checklist << fi if fi.src?
+				fi.output_ref_build.infiles.each &checkproc
+				fi.output_ref_build.orderfiles.each &checkproc
+			end
+			files.each &checkproc
+			exit puts('found nothing to build') || 0 if checklist.empty?
+			checklist.each {|file| file.check_for_build}
+		end
+		while Thread.list.size > 1
+			thr = Thread.list[-1]
+			thr.join unless thr == Thread.current
+		end
+		puts 'Rmk: build end'
 	end
 
 	def new_thread!(&cmd) Thread.new cmd, &method(:default_thread_body) end

@@ -25,4 +25,4 @@ targets = OptionParser.new{ |opts|
 }.parse(ARGV)
 rmk = Rmk.new srcroot:options[:srcroot], outroot:options[:outroot]
 rmk.parse
-rmk.build targets
+rmk.build *targets
