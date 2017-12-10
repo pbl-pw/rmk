@@ -196,6 +196,7 @@ class Rmk::VDir
 				break unless lines[lid].sub!(/(?<!\$)(?:\$\$)*\K\$\n/m, '')
 				line += lines[lid]
 				lid += 1
+				lines[lid]&.lstrip!
 			end
 			parse_line lid < lines.size ? line + lines[lid] : line, markid
 			lid += 1
