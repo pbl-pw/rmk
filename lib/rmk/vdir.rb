@@ -76,8 +76,8 @@ class Rmk::VDir
 	protected def find_srcfiles_imp(pattern)
 		::Dir[join_abs_src_path pattern].map! do |fn|
 			next @srcfiles[fn] if @srcfiles.include? fn
-			@srcfiles[fn] = @rmk.add_src_file Rmk::VFile.new path: fn, is_src: true,
-						       vname:fn[@abs_src_path.size .. -1], vpath:fn[@rmk.srcroot.size + 1 .. -1]
+			@srcfiles[fn] = @rmk.add_src_file path: fn,
+						vname:fn[@abs_src_path.size .. -1], vpath:fn[@rmk.srcroot.size + 1 .. -1]
 		end
 	end
 
@@ -110,9 +110,7 @@ class Rmk::VDir
 	# @param name file name, must relative to this dir
 	# @return [VFile] virtual file object
 	def add_out_file(name)
-		name = @vars.unescape_str name
-		@outfiles[name] = @rmk.add_out_file Rmk::VFile.new(vname:name,
-								path:join_abs_out_path(name), vpath:join_virtual_path(name))
+		@outfiles[name] = @rmk.add_out_file vname:name, path:join_abs_out_path(name), vpath:join_virtual_path(name)
 	end
 
 	private def begin_define_nonvar(indent)

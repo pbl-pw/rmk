@@ -103,22 +103,27 @@ class Rmk
 	end
 
 	# register a out file
-	# @param file [Rmk::VFile] virtual file object
-	# @return [Rmk::VFile] return file obj back
-	def add_out_file(file)
+	# @param path [String]
+	# @param vname [String]
+	# @param vpath [String]
+	# @return [Rmk::VFile] return file obj added
+	def add_out_file(path:, vname:nil, vpath:nil)
 		@files_mutex.synchronize do
-			raise "file '#{file.path}' has been defined" if @outfiles.include? file.path
-			file = @srcfiles.delete(file.path).change_to_out! file if @srcfiles.include? file.path
-			@outfiles[file.path] = file
+			raise "file '#{path}' has been defined" if @outfiles.include? path
+			file = @srcfiles.delete(path).change_to_out! file if @srcfiles.include? path
+			@outfiles[path] = VFile.new path:path, vname:vname, vpath:vpath
 		end
 	end
 
 	# register a src file
-	# @param file [Rmk::VFile] virtual file object
-	# @return [Rmk::VFile] when file has exist, return exist,otherwise the new
-	def add_src_file(file)
+	# @param path [String]
+	# @param vname [String]
+	# @param vpath [String]
+	# @return [Rmk::VFile] return file obj added
+	def add_src_file(path:, vname:nil, vpath:nil)
 		@files_mutex.synchronize do
-			@outfiles[file.path] || (@srcfiles[file.path] ||= file)
+			@outfiles[path] ||
+				(@srcfiles[path] ||= VFile.new(path:path, vname:vname, vpath:vpath, is_src:true))
 		end
 	end
 
