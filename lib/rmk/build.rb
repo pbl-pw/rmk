@@ -20,6 +20,7 @@ class Rmk::Build
 		@mutex = Thread::Mutex.new
 		@updatedcnt = 0		# input file updated count
 		@runed = false			# build has been runed
+		@input_modified = false	# input file has modified
 
 		@dir = dir
 		@rule = rule
@@ -74,15 +75,18 @@ class Rmk::Build
 
 	def vars; @vars.upstream_writer end
 
-	def input_updated!
-		return if @runed
+	def input_updated!(modified, order:false)
 		@dir.rmk.new_thread! &method(:run) if @mutex.synchronize do
+			next if @runed
 			@updatedcnt += 1
+			@input_modified ||= order ? modified == :create : modified
 			needrun = @updatedcnt >= @infiles.size + @orderfiles.size
 			@runed = true if needrun
 			needrun
 		end
 	end
+
+	def order_updated!(modified) input_updated! modified, order:true end
 
 	@output_mutex = Thread::Mutex.new
 	def self.puts(*parms) @output_mutex.synchronize{$stdout.puts *parms} end
@@ -95,13 +99,20 @@ class Rmk::Build
 	end
 
 	private def run
-		cmd = @vars.interpolate_str @vars['command'] || @rule.command
-		unless /^\s*$/.match? cmd
-			Rmk::Build.puts @vars['echo'] || cmd
-			result = system cmd
-			return Rmk::Build.err_puts "can't excute command\n" if result.nil?
-			return unless result
+		if @input_modified || @outfiles.any?{|file| !File.exist? file.path}
+			cmd = @vars.interpolate_str @vars['command'] || @rule.command
+			unless /^\s*$/.match? cmd
+				Rmk::Build.puts @vars['echo'] || cmd
+				result = system cmd
+				return Rmk::Build.err_puts "can't excute command\n" if result.nil?
+				return unless result
+			end
+			@outfiles.each do |file|
+				file.updated! true
+				@dir.rmk.file_store_modified_id file
+			end
+		else
+			@outfiles.each{|file| file.check_for_build}
 		end
-		@outfiles.each {|file| file.updated!}
 	end
 end

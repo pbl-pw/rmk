@@ -3,7 +3,7 @@ require_relative 'rmk'
 # virtual file which represent a real OS file
 class Rmk::VFile
 	attr_reader :path, :vname, :vpath
-	attr_accessor :is_src
+	attr_accessor :is_src, :modified_id
 
 	def src?; @is_src end
 
@@ -16,9 +16,14 @@ class Rmk::VFile
 	# build which include this file as output file
 	attr_accessor :output_ref_build
 
-	def initialize(path:, vname:nil, vpath:nil, is_src:false)
+	# create VFile
+	# @param rmk [Rmk]
+	# @param path [String] file's absolute path, must be normalized
+	# @param vname [String] file's virtual name
+	# @param vpath [String] file's virtual path
+	def initialize(rmk:, path:, vname:nil, vpath:nil, is_src:false)
 		raise 'virtual file must set vpath' if vname && !vpath
-		@path, @vname, @vpath, @is_src = path, vname, vpath, is_src
+		@rmk, @path, @vname, @vpath, @is_src = rmk, path, vname, vpath, is_src
 		@input_ref_builds, @order_ref_builds = [], []
 		@output_ref_build = nil unless is_src
 	end
@@ -40,9 +45,13 @@ class Rmk::VFile
 		self
 	end
 
-	def updated!; input_ref_builds.each{|build| build.input_updated!} end
+	def updated!(modified)
+		input_ref_builds.each{|build| build.input_updated! modified}
+		order_ref_builds.each{|build| build.order_updated! modified}
+	end
 
 	def check_for_build
-		updated!
+		updated! @rmk.file_modified? self
+		@rmk.file_store_modified_id self
 	end
 end

@@ -37,6 +37,8 @@ class Rmk
 		@src_relative = srcroot.match?(/^\.\.[\\\/]/) && Rmk.normalize_path(srcroot)
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		Dir.chdir @outroot
+		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
+		@files_mtime = File.exist?('.rmk/mtime') ? Marshal.load(IO.binread '.rmk/mtime') : {}
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -47,6 +49,26 @@ class Rmk
 
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
+
+	# check file are modified outside or not
+	# @param file [VFile] file to check
+	# @return [Boolean, :create] if file exist, return modified or not, otherwise return :create means file need create
+	def file_modified?(file)
+		if File.exist? file.path
+			file.modified_id = File.mtime(file.path).to_i unless file.modified_id
+			!(@files_mtime[file.path]&.>= file.modified_id)
+		else
+			file.modified_id = 0
+			:create
+		end
+	end
+
+	# store file modify id
+	# @param file [VFile] file to store
+	def file_store_modified_id(file)
+		file.modified_id = File.mtime(file.path).to_i unless file.modified_id
+		@files_mtime[file.path] = file.modified_id
+	end
 
 	# split path pattern to dir part and file match regex part
 	# @param pattern [String] absolute path, can include '*' to match any char at last no dir part
@@ -73,7 +95,7 @@ class Rmk
 				::Dir[pattern].each do |fn|
 					next if @outfiles.include? fn
 					next files << @srcfiles[fn] if @srcfiles.include? fn
-					files << (@srcfiles[fn] = VFile.new path:fn, is_src:true)
+					files << (@srcfiles[fn] = VFile.new rmk:self, path:fn, is_src:true)
 				end
 			end
 			return files, regex
@@ -82,7 +104,7 @@ class Rmk
 				next @outfiles[path] if @outfiles.include? path
 				next @srcfiles[path] if @srcfiles.include? path
 				raise "file '#{path}' not exist" unless ::File.exist? path
-				@srcfiles[path] = VFile.new path:path, is_src:true
+				@srcfiles[path] = VFile.new rmk:self, path:path, is_src:true
 			end
 			return [file], nil
 		end
@@ -111,7 +133,7 @@ class Rmk
 		@files_mutex.synchronize do
 			raise "file '#{path}' has been defined" if @outfiles.include? path
 			file = @srcfiles.delete(path).change_to_out! file if @srcfiles.include? path
-			@outfiles[path] = VFile.new path:path, vname:vname, vpath:vpath
+			@outfiles[path] = VFile.new rmk:self, path:path, vname:vname, vpath:vpath
 		end
 	end
 
@@ -123,7 +145,7 @@ class Rmk
 	def add_src_file(path:, vname:nil, vpath:nil)
 		@files_mutex.synchronize do
 			@outfiles[path] ||
-				(@srcfiles[path] ||= VFile.new(path:path, vname:vname, vpath:vpath, is_src:true))
+				(@srcfiles[path] ||= VFile.new(rmk:self, path:path, vname:vname, vpath:vpath, is_src:true))
 		end
 	end
 
@@ -168,6 +190,7 @@ class Rmk
 			thr.join unless thr == Thread.current
 		end
 		puts 'Rmk: build end'
+		IO.binwrite '.rmk/mtime', Marshal.dump(@files_mtime)
 	end
 
 	def new_thread!(&cmd) Thread.new cmd, &method(:default_thread_body) end
