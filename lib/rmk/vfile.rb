@@ -8,10 +8,10 @@ class Rmk::VFile
 	def src?; @is_src end
 
 	# builds which include this file as input file
-	def input_ref_builds; @ibuilds end
+	def input_ref_builds; @input_ref_builds end
 
 	# builds which include this file as order-only file
-	def order_ref_builds; @odbuilds end
+	def order_ref_builds; @order_ref_builds end
 
 	# build which include this file as output file
 	attr_accessor :output_ref_build
@@ -19,8 +19,25 @@ class Rmk::VFile
 	def initialize(path:, vname:nil, vpath:nil, is_src:false)
 		raise 'virtual file must set vpath' if vname && !vpath
 		@path, @vname, @vpath, @is_src = path, vname, vpath, is_src
-		@ibuilds = []
-		@output_ref_build, @odbuilds = [], [] unless is_src
+		@input_ref_builds, @order_ref_builds = [], []
+		@output_ref_build = nil unless is_src
+	end
+
+	# change to out file
+	# @param outfile [Rmk::VFile] target file
+	# @return [self]
+	def change_to_out!(outfile)
+		raise "outfile '#{@path}' can't change to outfile" if src?
+		raise "outfile '#{@path}' can't change to srcfile" if outfile.src?
+		unless @path == outfile.path && (!@vpath || @vpath == outfile.vpath)
+			raise "srcfile '#{@path}' can't change to outfile '#{outfile.path}'"
+		end
+		@vname = outfile.vname
+		@is_src = false
+		@input_ref_builds.concat outfile.input_ref_builds
+		@order_ref_builds.concat outfile.order_ref_builds
+		@output_ref_build = outfile.output_ref_build
+		self
 	end
 
 	def updated!; input_ref_builds.each{|build| build.input_updated!} end

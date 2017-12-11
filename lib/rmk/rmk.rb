@@ -108,7 +108,7 @@ class Rmk
 	def add_out_file(file)
 		@files_mutex.synchronize do
 			raise "file '#{file.path}' has been defined" if @outfiles.include? file.path
-			@srcfiles.delete file.path if @srcfiles.include? file.path
+			file = @srcfiles.delete(file.path).change_to_out! file if @srcfiles.include? file.path
 			@outfiles[file.path] = file
 		end
 	end
