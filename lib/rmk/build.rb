@@ -99,20 +99,16 @@ class Rmk::Build
 	end
 
 	private def run
-		if @input_modified || @outfiles.any?{|file| !File.exist? file.path}
-			cmd = @vars.interpolate_str @vars['command'] || @rule.command
-			unless /^\s*$/.match? cmd
-				Rmk::Build.puts @vars['echo'] || cmd
-				result = system cmd
-				return Rmk::Build.err_puts "can't excute command\n" if result.nil?
-				return unless result
-			end
-			@outfiles.each do |file|
-				file.updated! true
-				@dir.rmk.file_store_modified_id file
-			end
-		else
-			@outfiles.each{|file| file.check_for_build}
+		exec = nil
+		modifieds = @outfiles.map{|file| File.exist?(file.path) ? true : (exec = :create)}
+		return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
+		cmd = @vars.interpolate_str @vars['command'] || @rule.command
+		unless /^\s*$/.match? cmd
+			Rmk::Build.puts @vars['echo'] || cmd
+			result = system cmd
+			return Rmk::Build.err_puts "can't excute command\n" if result.nil?
+			return @outfiles.each{|file| File.delete file.path if File.exist? file.path} unless result
 		end
+		@outfiles.size.times {|i| @outfiles[i].updated! modifieds[i]}
 	end
 end

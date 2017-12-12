@@ -20,6 +20,8 @@ class Rmk
 		result
 	end
 
+	MID_PATH = '.rmk/mid'
+
 	# create Rmk object
 	# @param srcroot [String] source root dir,can be absolute or relative to output root(start with ..)
 	# @param outroot [String] output root dir,can be absolute or relative to pwd,default pwd
@@ -29,6 +31,7 @@ class Rmk
 		@waitting_threads = []
 		@running_threads_cnt = 1
 		@files_mutex = Thread::Mutex.new	# files operate mutex
+		@mid_mutex = Thread::Mutex.new	# file modified id mutex
 
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
 		raise "source path '#{@srcroot}' not exist or not directory" unless ::Dir.exist?(@srcroot)
@@ -38,7 +41,7 @@ class Rmk
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		Dir.chdir @outroot
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
-		@files_mtime = File.exist?('.rmk/mtime') ? Marshal.load(IO.binread '.rmk/mtime') : {}
+		File.exist?(MID_PATH) ? @mid_thread = new_thread!{@files_mid = Marshal.load(IO.binread MID_PATH)} : @files_mid = {}
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -50,25 +53,15 @@ class Rmk
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
 
-	# check file are modified outside or not
-	# @param file [VFile] file to check
-	# @return [Boolean, :create] if file exist, return modified or not, otherwise return :create means file need create
-	def file_modified?(file)
-		if File.exist? file.path
-			file.modified_id = File.mtime(file.path).to_i unless file.modified_id
-			!(@files_mtime[file.path]&.>= file.modified_id)
-		else
-			file.modified_id = 0
-			:create
-		end
-	end
-
-	# store file modify id
+	# load stored last file modified id
 	# @param file [VFile] file to store
-	def file_store_modified_id(file)
-		file.modified_id = File.mtime(file.path).to_i unless file.modified_id
-		@files_mtime[file.path] = file.modified_id
-	end
+	# @return [Object] last stored modified id or nil for no last stored id
+	def load_modified_id(file) @mid_mutex.synchronize{@files_mid[file.path]} end
+
+	# store file modified id
+	# @param file [VFile] file to store
+	# @return [Object] stored modified id
+	def store_modified_id(file, mid) @mid_mutex.synchronize{@files_mid[file.path] = mid} end
 
 	# split path pattern to dir part and file match regex part
 	# @param pattern [String] absolute path, can include '*' to match any char at last no dir part
@@ -160,6 +153,7 @@ class Rmk
 	end
 
 	def build(*tgts)
+		@mid_thread&.join
 		if tgts.empty?
 			files = @defaultfiles
 		else
@@ -190,7 +184,7 @@ class Rmk
 			thr.join unless thr == Thread.current
 		end
 		puts 'Rmk: build end'
-		IO.binwrite '.rmk/mtime', Marshal.dump(@files_mtime)
+		IO.binwrite MID_PATH, Marshal.dump(@files_mid)
 	end
 
 	def new_thread!(&cmd) Thread.new cmd, &method(:default_thread_body) end
