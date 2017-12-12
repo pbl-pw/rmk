@@ -102,7 +102,7 @@ class Rmk::Build
 		exec = nil
 		modifieds = @outfiles.map{|file| File.exist?(file.path) ? true : (exec = :create)}
 		return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
-		@vars['depfile'] ||= @outfiles[0] + '.dep' if @vars['deptype']
+		@vars['depfile'] ||= (@outfiles[0].vpath || @outfiles[0].path) + '.dep' if @vars['deptype']
 		cmd = @vars.interpolate_str @vars['command'] || @rule.command
 		unless /^\s*$/.match? cmd
 			std, err, result = Open3.capture3 cmd
@@ -117,10 +117,23 @@ class Rmk::Build
 		@outfiles.size.times {|i| @outfiles[i].updated! modifieds[i]}
 		return unless @vars['deptype']
 		unless File.exist? @vars['depfile']
-			Rmk::Build.err_puts "depend file '#{@vars['depfile']}' which must be created by build '#{@vars['out']}' not found"
+			Rmk::Build.err_puts "Rmk: depend file '#{@vars['depfile']}' which must be created by build '#{@vars['out']}' not found"
 		end
 		if @vars['deptype'] == 'make'
-			# process depfile
+			parse_make_depfile @vars['depfile']
+		else
+			Rmk::Build.err_puts "Rmk: depend type '#{@vars['deptype']}' not support"
+		end
+	end
+
+	def parse_make_depfile(path)
+		lines = IO.readlines path
+		line, lid = lines[0], 0
+		head, match, line = line.partition /(?<!\\)(?:\\\\)*\K:\s+/
+		files = []
+		while lid < lines.size
+			line.gsub! /\\(n|t)/
+			parms = line.split /(?<!\\)(?:\\\\)*\K\s+/
 		end
 	end
 end
