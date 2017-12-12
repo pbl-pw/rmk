@@ -105,10 +105,14 @@ class Rmk::Build
 		@vars['depfile'] ||= @outfiles[0] + '.dep' if @vars['deptype']
 		cmd = @vars.interpolate_str @vars['command'] || @rule.command
 		unless /^\s*$/.match? cmd
-			Rmk::Build.puts @vars['echo'] || cmd
-			result = system cmd
-			return Rmk::Build.err_puts "can't excute command\n" if result.nil?
-			return @outfiles.each{|file| File.delete file.path if File.exist? file.path} unless result
+			std, err, result = Open3.capture3 cmd
+			std = std.empty? ? @vars['echo'] || cmd : (@vars['echo'] || cmd) + ?\n + std
+			if result.exitstatus != 0
+				err = "execute faild: '#{cmd}'" if err.empty?
+				Rmk::Build.log_cmd_out std, err
+				return @outfiles.each{|file| File.delete file.path if File.exist? file.path}
+			end
+			Rmk::Build.log_cmd_out std, err
 		end
 		@outfiles.size.times {|i| @outfiles[i].updated! modifieds[i]}
 		return unless @vars['deptype']
