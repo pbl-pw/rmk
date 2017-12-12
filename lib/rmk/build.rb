@@ -102,6 +102,7 @@ class Rmk::Build
 		exec = nil
 		modifieds = @outfiles.map{|file| File.exist?(file.path) ? true : (exec = :create)}
 		return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
+		@vars['depfile'] ||= @outfiles[0] + '.dep' if @vars['deptype']
 		cmd = @vars.interpolate_str @vars['command'] || @rule.command
 		unless /^\s*$/.match? cmd
 			Rmk::Build.puts @vars['echo'] || cmd
@@ -110,5 +111,12 @@ class Rmk::Build
 			return @outfiles.each{|file| File.delete file.path if File.exist? file.path} unless result
 		end
 		@outfiles.size.times {|i| @outfiles[i].updated! modifieds[i]}
+		return unless @vars['deptype']
+		unless File.exist? @vars['depfile']
+			Rmk::Build.err_puts "depend file '#{@vars['depfile']}' which must be created by build '#{@vars['out']}' not found"
+		end
+		if @vars['deptype'] == 'make'
+			# process depfile
+		end
 	end
 end
