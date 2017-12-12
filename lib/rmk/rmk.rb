@@ -184,6 +184,7 @@ class Rmk
 			thr.join unless thr == Thread.current
 		end
 		puts 'Rmk: build end'
+		@files_mid.each_key {|key| @files_mid.delete key unless @srcfiles.include? key}
 		IO.binwrite MID_PATH, Marshal.dump(@files_mid)
 	end
 
