@@ -120,7 +120,9 @@ class Rmk::Build
 			Rmk::Build.err_puts "Rmk: depend file '#{@vars['depfile']}' which must be created by build '#{@vars['out']}' not found"
 		end
 		if @vars['deptype'] == 'make'
-			parse_make_depfile @vars['depfile']
+			files = parse_make_depfile @vars['depfile']
+			return Rmk::Build.err_puts "Rmk: syntax of depend file '#{@vars['depfile']}' not support yet" unless files
+			@dir.rmk.store_depend_files @outfiles[0].path, files
 		else
 			Rmk::Build.err_puts "Rmk: depend type '#{@vars['deptype']}' not support"
 		end
@@ -129,11 +131,19 @@ class Rmk::Build
 	def parse_make_depfile(path)
 		lines = IO.readlines path
 		line, lid = lines[0], 0
-		head, match, line = line.partition /(?<!\\)(?:\\\\)*\K:\s+/
+		_, _, line = line.partition /(?<!\\)(?:\\\\)*\K:\s+/
+		return unless line
 		files = []
 		while lid < lines.size
-			line.gsub! /\\(n|t)/
+			joinline = line.sub! /(?<!\\)(?:\\\\)*\K\\\n\z/,''
 			parms = line.split /(?<!\\)(?:\\\\)*\K\s+/
+			parms.delete_at 0 if parms[0].empty?
+			parms.each{|parm| parm.gsub! /\\(.)/, '\1'}
+			files.concat parms
+			break unless joinline
+			lid += 1
+			line = lines[lid]
 		end
+		files
 	end
 end

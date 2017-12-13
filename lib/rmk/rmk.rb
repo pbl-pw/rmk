@@ -20,7 +20,8 @@ class Rmk
 		result
 	end
 
-	MID_PATH = '.rmk/mid'
+	MID_PATH = '.rmk/mid'		# path of file which store files modified id
+	DEP_PATH = '.rmk/dep'		# path of file which store files additional depend input files
 
 	# create Rmk object
 	# @param srcroot [String] source root dir,can be absolute or relative to output root(start with ..)
@@ -32,6 +33,7 @@ class Rmk
 		@running_threads_cnt = 1
 		@files_mutex = Thread::Mutex.new	# files operate mutex
 		@mid_mutex = Thread::Mutex.new	# file modified id mutex
+		@dep_mutex = Thread::Mutex.new	# file depends process mutex
 
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
 		raise "source path '#{@srcroot}' not exist or not directory" unless ::Dir.exist?(@srcroot)
@@ -41,7 +43,8 @@ class Rmk
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		Dir.chdir @outroot
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
-		File.exist?(MID_PATH) ? @mid_thread = new_thread!{@files_mid = Marshal.load(IO.binread MID_PATH)} : @files_mid = {}
+		@files_mid = new_thread!{Marshal.load IO.binread MID_PATH} if File.exist?(MID_PATH)
+		@files_dep = new_thread!{Marshal.load IO.binread DEP_PATH} if File.exist?(DEP_PATH)
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -62,6 +65,16 @@ class Rmk
 	# @param file [VFile] file to store
 	# @return [Object] stored modified id
 	def store_modified_id(file, mid) @mid_mutex.synchronize{@files_mid[file.path] = mid} end
+
+	# load stored last file depend files
+	# @param path [String] file path to store
+	# @return [Array<String>] last stored depend files or nil for no last depend files
+	def load_depend_files(path) @dep_mutex.synchronize{@files_dep[path]} end
+
+	# store file depend files
+	# @param path [String] file path to store
+	# @return [Array<String>] stored depend files
+	def store_depend_files(path, deps) @dep_mutex.synchronize{@files_dep[path] = deps} end
 
 	# split path pattern to dir part and file match regex part
 	# @param pattern [String] absolute path, can include '*' to match any char at last no dir part
@@ -149,11 +162,20 @@ class Rmk
 	# @return [self]
 	def parse
 		@virtual_root.parse
+		@files_dep = @files_dep&.value || {}
+		@files_dep.each do |path, fns|
+			next warn "Rmk: warn: outfile '#{path}' not found when restore depfile" unless @outfiles.include? path
+			build = @outfiles[path].output_ref_build
+			fns.each do |fn|
+				files, _ = @virtual_root.find_inputfiles fn
+				files.each{|file| file.input_ref_builds << build; build.infiles << file}
+			end
+		end
 		self
 	end
 
 	def build(*tgts)
-		@mid_thread&.join
+		@files_mid = @files_mid&.value || {}
 		if tgts.empty?
 			files = @defaultfiles
 		else
@@ -186,6 +208,8 @@ class Rmk
 		puts 'Rmk: build end'
 		@files_mid.each_key {|key| @files_mid.delete key unless @srcfiles.include? key}
 		IO.binwrite MID_PATH, Marshal.dump(@files_mid)
+		@files_dep.each_key {|key| @files_dep.delete key unless @outfiles.include? key}
+		IO.binwrite DEP_PATH, Marshal.dump(@files_dep)
 	end
 
 	def new_thread!(&cmd) Thread.new cmd, &method(:default_thread_body) end
@@ -196,7 +220,7 @@ class Rmk
 			@waitting_threads << Thread.current
 			false
 		end
-		cmd.call
+		result = cmd.call
 		@thread_run_mutex.synchronize do
 			if @waitting_threads.empty?
 				@running_threads_cnt -= 1 unless @running_threads_cnt <= 0
@@ -204,6 +228,7 @@ class Rmk
 				@waitting_threads.shift.run
 			end
 		end
+		result
 	end
 
 	class Rule < Vars; end
