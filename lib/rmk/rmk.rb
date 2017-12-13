@@ -1,5 +1,6 @@
 require 'rmk/version'
 require_relative 'vars'
+require_relative 'schedule'
 
 class Rmk
 	# normalize path, drive letter upcase and path seperator set to '/'
@@ -27,10 +28,6 @@ class Rmk
 	# @param srcroot [String] source root dir,can be absolute or relative to output root(start with ..)
 	# @param outroot [String] output root dir,can be absolute or relative to pwd,default pwd
 	def initialize(srcroot:'', outroot:'')
-		Thread.abort_on_exception = true
-		@thread_run_mutex = Thread::Mutex.new
-		@waitting_threads = []
-		@running_threads_cnt = 1
 		@files_mutex = Thread::Mutex.new	# files operate mutex
 		@mid_mutex = Thread::Mutex.new	# file modified id mutex
 		@dep_mutex = Thread::Mutex.new	# file depends process mutex
@@ -43,8 +40,8 @@ class Rmk
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		Dir.chdir @outroot
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
-		@files_mid = new_thread!{Marshal.load IO.binread MID_PATH} if File.exist?(MID_PATH)
-		@files_dep = new_thread!{Marshal.load IO.binread DEP_PATH} if File.exist?(DEP_PATH)
+		@files_mid = Rmk::Schedule.new_thread!{Marshal.load IO.binread MID_PATH} if File.exist?(MID_PATH)
+		@files_dep = Rmk::Schedule.new_thread!{Marshal.load IO.binread DEP_PATH} if File.exist?(DEP_PATH)
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -210,25 +207,6 @@ class Rmk
 		IO.binwrite MID_PATH, Marshal.dump(@files_mid)
 		@files_dep.each_key {|key| @files_dep.delete key unless @outfiles.include? key}
 		IO.binwrite DEP_PATH, Marshal.dump(@files_dep)
-	end
-
-	def new_thread!(&cmd) Thread.new cmd, &method(:default_thread_body) end
-
-	private def default_thread_body(cmd)
-		Thread.stop unless @thread_run_mutex.synchronize do
-			next @running_threads_cnt += 1 unless @running_threads_cnt >= 8
-			@waitting_threads << Thread.current
-			false
-		end
-		result = cmd.call
-		@thread_run_mutex.synchronize do
-			if @waitting_threads.empty?
-				@running_threads_cnt -= 1 unless @running_threads_cnt <= 0
-			else
-				@waitting_threads.shift.run
-			end
-		end
-		result
 	end
 
 	class Rule < Vars; end

@@ -76,7 +76,7 @@ class Rmk::Build
 	def vars; @vars.upstream_writer end
 
 	def input_updated!(modified, order:false)
-		@dir.rmk.new_thread! &method(:run) if @mutex.synchronize do
+		Rmk::Schedule.new_thread! &method(:run) if @mutex.synchronize do
 			next if @runed
 			@updatedcnt += 1
 			@input_modified ||= order ? modified == :create : modified

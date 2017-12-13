@@ -325,7 +325,7 @@ class Rmk::VDir
 				raise "subdir '#{parm}' doesn't exist" if dirs.empty? && !parm.match?(/(?<!\$)(?:\$\$)*\K\*/)
 				dirs.each do |dir|
 					dir = include_subdir dir[@abs_src_path.size .. -2]
-					threads << @rmk.new_thread!( &dir.method(:parse) )
+					threads << Rmk::Schedule.new_thread!( &dir.method(:parse) )
 				end
 			end
 			threads.each{|thr| thr.join}
