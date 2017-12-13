@@ -57,14 +57,14 @@ class Rmk
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
 
 	# load stored last file modified id
-	# @param file [VFile] file to store
+	# @param path [String] file to store
 	# @return [Object] last stored modified id or nil for no last stored id
-	def load_modified_id(file) @mid_mutex.synchronize{@files_mid[file.path]} end
+	def load_modified_id(path) @mid_mutex.synchronize{@files_mid[path]} end
 
 	# store file modified id
-	# @param file [VFile] file to store
+	# @param path [String] file to store
 	# @return [Object] stored modified id
-	def store_modified_id(file, mid) @mid_mutex.synchronize{@files_mid[file.path] = mid} end
+	def store_modified_id(path, mid) @mid_mutex.synchronize{@files_mid[path] = mid} end
 
 	# load stored last file depend files
 	# @param path [String] file path to store
@@ -206,7 +206,7 @@ class Rmk
 			thr.join unless thr == Thread.current
 		end
 		puts 'Rmk: build end'
-		@files_mid.each_key {|key| @files_mid.delete key unless @srcfiles.include? key}
+		# @files_mid.each_key {|key| @files_mid.delete key unless @srcfiles.include? key}
 		IO.binwrite MID_PATH, Marshal.dump(@files_mid)
 		@files_dep.each_key {|key| @files_dep.delete key unless @outfiles.include? key}
 		IO.binwrite DEP_PATH, Marshal.dump(@files_dep)

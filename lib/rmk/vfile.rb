@@ -5,6 +5,8 @@ class Rmk::VFile
 	attr_reader :path, :vname, :vpath
 	attr_accessor :is_src
 
+	def self.generate_modified_id(path) File.mtime(path).to_i end
+
 	def src?; @is_src end
 
 	# builds which include this file as input file
@@ -29,16 +31,16 @@ class Rmk::VFile
 	end
 
 	# generate file's modified id from current disk content
-	def generate_modified_id; File.mtime(@path).to_i end
+	def generate_modified_id; Rmk::VFile.generate_modified_id @path end
 
 	# load last time modified id from system database
 	# @return [Object] last stored modified id or nil for no last stored id
-	def load_modified_id; @rmk.load_modified_id self end
+	def load_modified_id; @rmk.load_modified_id @path end
 
 	# store modified id to system database for next time check
 	# @param mid [Object] modified id
 	# @return [Object] stored modified id
-	def store_modified_id(mid) @rmk.store_modified_id self, mid end
+	def store_modified_id(mid) @rmk.store_modified_id @path, mid end
 
 	# change to out file
 	# @param outfile [Rmk::VFile] target file

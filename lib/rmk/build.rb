@@ -123,6 +123,11 @@ class Rmk::Build
 			files = parse_make_depfile @vars['depfile']
 			return Rmk::Build.err_puts "Rmk: syntax of depend file '#{@vars['depfile']}' not support yet" unless files
 			@dir.rmk.store_depend_files @outfiles[0].path, files
+			files.each do |file|
+				file = File.absolute_path file, @dir.rmk.outroot
+				next if @dir.rmk.srcfiles.include?(file) || @dir.rmk.outfiles.include?(file)
+				@dir.rmk.store_modified_id file, Rmk::VFile.generate_modified_id(file)
+			end
 		else
 			Rmk::Build.err_puts "Rmk: depend type '#{@vars['deptype']}' not support"
 		end
