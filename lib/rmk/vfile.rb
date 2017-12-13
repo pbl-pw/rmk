@@ -35,12 +35,12 @@ class Rmk::VFile
 
 	# load last time modified id from system database
 	# @return [Object] last stored modified id or nil for no last stored id
-	def load_modified_id; @rmk.load_modified_id @path end
+	def load_modified_id; @rmk.mid_storage[@path] end
 
 	# store modified id to system database for next time check
 	# @param mid [Object] modified id
 	# @return [Object] stored modified id
-	def store_modified_id(mid) @rmk.store_modified_id @path, mid end
+	def store_modified_id(mid) @rmk.mid_storage[@path] = mid end
 
 	# change to out file
 	# @param outfile [Rmk::VFile] target file

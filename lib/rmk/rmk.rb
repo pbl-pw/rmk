@@ -1,6 +1,6 @@
 require 'rmk/version'
 require_relative 'vars'
-require_relative 'schedule'
+require_relative 'storage'
 
 class Rmk
 	# normalize path, drive letter upcase and path seperator set to '/'
@@ -21,16 +21,11 @@ class Rmk
 		result
 	end
 
-	MID_PATH = '.rmk/mid'		# path of file which store files modified id
-	DEP_PATH = '.rmk/dep'		# path of file which store files additional depend input files
-
 	# create Rmk object
 	# @param srcroot [String] source root dir,can be absolute or relative to output root(start with ..)
 	# @param outroot [String] output root dir,can be absolute or relative to pwd,default pwd
 	def initialize(srcroot:'', outroot:'')
 		@files_mutex = Thread::Mutex.new	# files operate mutex
-		@mid_mutex = Thread::Mutex.new	# file modified id mutex
-		@dep_mutex = Thread::Mutex.new	# file depends process mutex
 
 		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
 		raise "source path '#{@srcroot}' not exist or not directory" unless ::Dir.exist?(@srcroot)
@@ -40,8 +35,8 @@ class Rmk
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		Dir.chdir @outroot
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
-		@files_mid = Rmk::Schedule.new_thread!{Marshal.load IO.binread MID_PATH} if File.exist?(MID_PATH)
-		@files_dep = Rmk::Schedule.new_thread!{Marshal.load IO.binread DEP_PATH} if File.exist?(DEP_PATH)
+		@files_mid = Rmk::Storage.new '.rmk/mid', {}
+		@files_dep = Rmk::Storage.new '.rmk/dep', {}
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -50,28 +45,12 @@ class Rmk
 	end
 	attr_reader :srcroot, :outroot, :src_relative, :vars, :virtual_root, :srcfiles, :outfiles
 
+	def mid_storage; @files_mid end
+
+	def dep_storage; @files_dep end
+
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
-
-	# load stored last file modified id
-	# @param path [String] file to store
-	# @return [Object] last stored modified id or nil for no last stored id
-	def load_modified_id(path) @mid_mutex.synchronize{@files_mid[path]} end
-
-	# store file modified id
-	# @param path [String] file to store
-	# @return [Object] stored modified id
-	def store_modified_id(path, mid) @mid_mutex.synchronize{@files_mid[path] = mid} end
-
-	# load stored last file depend files
-	# @param path [String] file path to store
-	# @return [Array<String>] last stored depend files or nil for no last depend files
-	def load_depend_files(path) @dep_mutex.synchronize{@files_dep[path]} end
-
-	# store file depend files
-	# @param path [String] file path to store
-	# @return [Array<String>] stored depend files
-	def store_depend_files(path, deps) @dep_mutex.synchronize{@files_dep[path] = deps} end
 
 	# split path pattern to dir part and file match regex part
 	# @param pattern [String] absolute path, can include '*' to match any char at last no dir part
@@ -159,8 +138,8 @@ class Rmk
 	# @return [self]
 	def parse
 		@virtual_root.parse
-		@files_dep = @files_dep&.value || {}
-		@files_dep.each do |path, fns|
+		@files_dep.wait_ready
+		@files_dep.data!.each do |path, fns|
 			next warn "Rmk: warn: outfile '#{path}' not found when restore depfile" unless @outfiles.include? path
 			build = @outfiles[path].output_ref_build
 			fns.each do |fn|
@@ -172,7 +151,7 @@ class Rmk
 	end
 
 	def build(*tgts)
-		@files_mid = @files_mid&.value || {}
+		@files_mid.wait_ready
 		if tgts.empty?
 			files = @defaultfiles
 		else
@@ -204,9 +183,9 @@ class Rmk
 		end
 		puts 'Rmk: build end'
 		# @files_mid.each_key {|key| @files_mid.delete key unless @srcfiles.include? key}
-		IO.binwrite MID_PATH, Marshal.dump(@files_mid)
-		@files_dep.each_key {|key| @files_dep.delete key unless @outfiles.include? key}
-		IO.binwrite DEP_PATH, Marshal.dump(@files_dep)
+		@files_mid.save
+		@files_dep.data!.each_key {|key| @files_dep.data!.delete key unless @outfiles.include? key}
+		@files_dep.save
 	end
 
 	class Rule < Vars; end
