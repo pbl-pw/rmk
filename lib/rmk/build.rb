@@ -119,11 +119,14 @@ class Rmk::Build
 		end
 		if @vars['deptype'] == 'make'
 			files = parse_make_depfile @vars['depfile']
+			File.delete @vars['depfile']
 			return Rmk::Build.err_puts "Rmk: syntax of depend file '#{@vars['depfile']}' not support yet" unless files
 			@dir.rmk.dep_storage[@outfiles[0].path] = files
 			files.each do |file|
 				file = File.absolute_path file, @dir.rmk.outroot
-				next if @dir.rmk.srcfiles.include?(file) || @dir.rmk.outfiles.include?(file)
+				next if @dir.rmk.srcfiles.include?(file)
+				@dir.rmk.src_list_storage[file] = @outfiles.map{|out| out.vpath || out.path}
+				next if @dir.rmk.outfiles.include?(file)
 				@dir.rmk.mid_storage[file] = Rmk::VFile.generate_modified_id(file)
 			end
 		else

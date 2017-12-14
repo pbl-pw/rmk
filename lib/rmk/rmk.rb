@@ -24,6 +24,7 @@ class Rmk
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
 		@mid_storage = Rmk::Storage.new '.rmk/mid', {}
 		@dep_storage = Rmk::Storage.new '.rmk/dep', {}
+		@src_list_storage = Rmk::Storage.new '.rmk/src', {}
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -31,7 +32,7 @@ class Rmk
 		@virtual_root = Rmk::VDir.new self, nil
 	end
 	attr_reader :srcroot, :outroot, :src_relative, :vars, :virtual_root, :srcfiles, :outfiles
-	attr_reader :mid_storage, :dep_storage
+	attr_reader :mid_storage, :dep_storage, :src_list_storage
 
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
@@ -58,21 +59,21 @@ class Rmk
 			files = []
 			@files_mutex.synchronize do
 				@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
-				::Dir[pattern].each do |fn|
+				Dir[pattern].each do |fn|
 					next if @outfiles.include? fn
 					next files << @srcfiles[fn] if @srcfiles.include? fn
 					files << (@srcfiles[fn] = VFile.new rmk:self, path:fn, is_src:true)
 				end
 			end
-			return files, regex
+			[files, regex]
 		else
 			file = @files_mutex.synchronize do
 				next @outfiles[path] if @outfiles.include? path
 				next @srcfiles[path] if @srcfiles.include? path
-				raise "file '#{path}' not exist" unless ::File.exist? path
+				next unless ::File.exist? path
 				@srcfiles[path] = VFile.new rmk:self, path:path, is_src:true
 			end
-			return [file], nil
+			[file ? [file] : [], nil]
 		end
 	end
 
@@ -148,6 +149,21 @@ class Rmk
 			end
 		end
 		puts 'Rmk: build start'
+		@src_list_storage.wait_ready
+		@src_list_storage.data!.each do |src, outs|
+			next if @srcfiles.include? src
+			outs.each{|file| File.delete file rescue nil}
+		end
+		Rmk::Schedule.new_thread! do
+			@src_list_storage.data!.clear
+			@srcfiles.each_value do |src|
+				outs = []
+				action = proc{|build| build.outfiles.each{|out| outs << (out.vpath || out.path)}}
+				src.input_ref_builds.each &action
+				src.order_ref_builds.each &action
+				@src_list_storage.data![src.path] = outs
+			end
+		end
 		if files.empty?
 			@srcfiles.each_value{|file| file.check_for_build}
 		else
@@ -170,6 +186,7 @@ class Rmk
 		@mid_storage.save
 		@dep_storage.data!.each_key {|key| @dep_storage.data!.delete key unless @outfiles.include? key}
 		@dep_storage.save
+		@src_list_storage.save
 	end
 
 	class Rule < Vars; end
