@@ -154,14 +154,14 @@ class Rmk
 			next if @srcfiles.include? src
 			outs.each{|file| File.delete file rescue nil}
 		end
+		@src_list_storage.data!.clear
 		Rmk::Schedule.new_thread! do
-			@src_list_storage.data!.clear
 			@srcfiles.each_value do |src|
 				outs = []
 				action = proc{|build| build.outfiles.each{|out| outs << (out.vpath || out.path)}}
 				src.input_ref_builds.each &action
 				src.order_ref_builds.each &action
-				@src_list_storage.data![src.path] = outs
+				@src_list_storage[src.path] = outs
 			end
 		end
 		if files.empty?

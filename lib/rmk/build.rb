@@ -124,10 +124,10 @@ class Rmk::Build
 			@dir.rmk.dep_storage[@outfiles[0].path] = files
 			files.each do |file|
 				file = File.absolute_path file, @dir.rmk.outroot
-				next if @dir.rmk.srcfiles.include?(file)
-				@dir.rmk.src_list_storage[file] = @outfiles.map{|out| out.vpath || out.path}
-				next if @dir.rmk.outfiles.include?(file)
-				@dir.rmk.mid_storage[file] = Rmk::VFile.generate_modified_id(file)
+				next if @dir.rmk.srcfiles.include?(file) || @dir.rmk.outfiles.include?(file)
+				outs = @outfiles.map{|out| out.vpath || out.path}
+				@dir.rmk.src_list_storage.sync{|data| data[file] ? data[file].concat(outs) : data[file] = outs}
+				@dir.rmk.mid_storage.sync{|data| data[file] ||= Rmk::VFile.generate_modified_id(file)}
 			end
 		else
 			Rmk::Build.err_puts "Rmk: depend type '#{@vars['deptype']}' not support"
@@ -144,7 +144,7 @@ class Rmk::Build
 			joinline = line.sub! /(?<!\\)(?:\\\\)*\K\\\n\z/,''
 			parms = line.split /(?<!\\)(?:\\\\)*\K\s+/
 			parms.delete_at 0 if parms[0].empty?
-			parms.each{|parm| parm.gsub! /\\(.)/, '\1'}
+			parms.map!{|parm| File.absolute_path parm.gsub(/\\(.)/, '\1')}
 			files.concat parms
 			break unless joinline
 			lid += 1
