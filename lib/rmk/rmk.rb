@@ -18,8 +18,8 @@ class Rmk
 		raise "source path '#{@srcroot}' not exist or not directory" unless ::Dir.exist?(@srcroot)
 		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
 		warn 'in-source build' if @outroot == @srcroot
-		@src_relative = srcroot.match?(/^\.\.[\\\/]/) && Rmk.normalize_path(srcroot)
-		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
+		@src_relative = srcroot.match?(/^\.\./) && Rmk.normalize_path(srcroot)
+		Dir.mkdir @outroot unless Dir.exist? @outroot
 		Dir.chdir @outroot
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
 		@mid_storage = Rmk::Storage.new '.rmk/mid', {}
