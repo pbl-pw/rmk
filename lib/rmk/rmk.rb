@@ -35,8 +35,8 @@ class Rmk
 		::Dir.mkdir @outroot unless ::Dir.exist? @outroot
 		Dir.chdir @outroot
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
-		@files_mid = Rmk::Storage.new '.rmk/mid', {}
-		@files_dep = Rmk::Storage.new '.rmk/dep', {}
+		@mid_storage = Rmk::Storage.new '.rmk/mid', {}
+		@dep_storage = Rmk::Storage.new '.rmk/dep', {}
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -44,10 +44,7 @@ class Rmk
 		@virtual_root = Rmk::VDir.new self, nil
 	end
 	attr_reader :srcroot, :outroot, :src_relative, :vars, :virtual_root, :srcfiles, :outfiles
-
-	def mid_storage; @files_mid end
-
-	def dep_storage; @files_dep end
+	attr_reader :mid_storage, :dep_storage
 
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
@@ -138,8 +135,8 @@ class Rmk
 	# @return [self]
 	def parse
 		@virtual_root.parse
-		@files_dep.wait_ready
-		@files_dep.data!.each do |path, fns|
+		@dep_storage.wait_ready
+		@dep_storage.data!.each do |path, fns|
 			next warn "Rmk: warn: outfile '#{path}' not found when restore depfile" unless @outfiles.include? path
 			build = @outfiles[path].output_ref_build
 			fns.each do |fn|
@@ -151,7 +148,7 @@ class Rmk
 	end
 
 	def build(*tgts)
-		@files_mid.wait_ready
+		@mid_storage.wait_ready
 		if tgts.empty?
 			files = @defaultfiles
 		else
@@ -183,9 +180,9 @@ class Rmk
 		end
 		puts 'Rmk: build end'
 		# @files_mid.each_key {|key| @files_mid.delete key unless @srcfiles.include? key}
-		@files_mid.save
-		@files_dep.data!.each_key {|key| @files_dep.data!.delete key unless @outfiles.include? key}
-		@files_dep.save
+		@mid_storage.save
+		@dep_storage.data!.each_key {|key| @dep_storage.data!.delete key unless @outfiles.include? key}
+		@dep_storage.save
 	end
 
 	class Rule < Vars; end
