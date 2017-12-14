@@ -43,16 +43,14 @@ class Rmk::Build
 		end
 		@vars['stem'] = stem if stem
 
-		Rmk.split_parms(@vars.preprocess_str implicit_input).each do |fn|
-			fn = @vars.unescape_str fn
+		@vars.split_str(implicit_input).each do |fn|
 			files, _ = @dir.find_inputfiles fn
 			raise "pattern '#{fn}' not match any file" if files.empty?
 			files.each{|f| f.input_ref_builds << self}
 		end if implicit_input
 
 		@orderfiles = []
-		Rmk.split_parms(@vars.preprocess_str order_only_input).each do |fn|
-			fn = @vars.unescape_str fn
+		@vars.split_str(order_only_input).each do |fn|
 			files, _ = @dir.find_inputfiles fn
 			raise "pattern '#{fn}' not match any file" if files.empty?
 			files.each{|f| f.order_ref_builds << self}
@@ -60,16 +58,16 @@ class Rmk::Build
 
 		@outfiles = []
 		regout = proc do |fn|
-			file = dir.add_out_file @vars.unescape_str fn
+			file = dir.add_out_file fn
 			file.output_ref_build = self
 			@outfiles << file
 		end
 		output = @rule['out'] || raise('must have output') unless output
-		Rmk.split_parms(@vars.preprocess_str output).each &regout
+		@vars.split_str(output).each &regout
 		@vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
 		@vars['out_noext'] = @vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
 		@rule.vars.each {|name, str| @vars_we[name] = @vars.interpolate_str str}	# interpolate rule's vars to self
-		Rmk.split_parms(@vars.preprocess_str implicit_output).each &regout if implicit_output
+		@vars.split_str(implicit_output).each &regout if implicit_output
 		@vars.freeze
 	end
 

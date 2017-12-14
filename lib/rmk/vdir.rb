@@ -219,16 +219,13 @@ class Rmk::VDir
 		when /^if(n)?(?:(eq)|def)$/
 			logicnot, logicmod = Regexp.last_match(1), Regexp.last_match(2)
 			state = begin_define_nonvar indent
-			parms = Rmk.split_parms state[:vars].preprocess_str line
+			parms = state[:vars].split_str line
 			if logicmod
 				raise 'must have two str' unless parms.size == 2
-				parms[0] = state[:vars].unescape_str parms[0]
-				parms[1] = state[:vars].unescape_str parms[1]
 				value = logicnot ? parms[0] != parms[1] : parms[0] == parms[1]
 			else
 				raise 'must have var name' if parms.empty?
-				value = logicnot ? parms.all?{|parm| !@vars.include? state[:vars].unescape_str parm} :
-					parms.all?{|parm| @vars.include? state[:vars].unescape_str parm}
+				value = logicnot ? !parms.any?{|vn| @vars.include? vn} : parms.all?{|vn| @vars.include? vn}
 			end
 			@state << {indent:indent, type: :Condition, condition:value, vars:state[:vars]}
 		when 'else', 'endif'
@@ -267,7 +264,7 @@ class Rmk::VDir
 			else
 				oparms = []
 			end
-			iparms[0] = Rmk.split_parms(state[:vars].preprocess_str iparms[0]).map!{|fn| state[:vars].unescape_str fn}
+			iparms[0] = state[:vars].split_str iparms[0]
 			raise 'must have input file' if iparms[0].size == 0
 			if eachmode
 				vars = Rmk::MultiVarWriter.new
@@ -290,7 +287,7 @@ class Rmk::VDir
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
 		when 'default'
 			state = begin_define_nonvar indent
-			parms = Rmk.split_parms state[:vars].preprocess_str line
+			parms = state[:vars].split_str line
 			raise "must have file name" if parms.empty?
 			parms.each do |parm|
 				files = find_outfiles parm
@@ -299,10 +296,9 @@ class Rmk::VDir
 			end
 		when 'include'
 			state = begin_define_nonvar indent
-			parms = Rmk.split_parms state[:vars].preprocess_str line
+			parms = state[:vars].split_str line
 			raise "#{lid}: must have file name" if parms.empty?
 			parms.each do |parm|
-				parm = state[:vars].unescape_str parm
 				if parm.match? /^[a-zA-Z]:/
 					raise "file '#{parm}' not exist" unless ::File.exist? parm
 					parse_file parm
@@ -316,11 +312,10 @@ class Rmk::VDir
 			end
 		when 'incdir'
 			state = begin_define_nonvar indent
-			parms = Rmk.split_parms state[:vars].preprocess_str line
+			parms = state[:vars].split_str line
 			raise "#{lid}; must have dir name or matcher" if parms.empty?
 			threads = []
 			parms.each do |parm|
-				parm = state[:vars].unescape_str parm
 				dirs = ::Dir[::File.join @abs_src_path, parm, '']
 				raise "subdir '#{parm}' doesn't exist" if dirs.empty? && !parm.match?(/(?<!\$)(?:\$\$)*\K\*/)
 				dirs.each do |dir|

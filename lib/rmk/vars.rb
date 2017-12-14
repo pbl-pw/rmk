@@ -26,6 +26,19 @@ class Rmk::Vars < Hash
 	# preprocess str, and then unescape the result
 	def interpolate_str(str) unescape_str preprocess_str str end
 
+	# preprocess str,and then split use white spaces, and then unescape each result, typically used for split file list
+	# @param str [String] str to split
+	# @return [Array<String>]
+	def split_str(str)
+		str = preprocess_str str
+		result = []
+		until str.empty?
+			head, _, str = str.partition /(?<!\$)(?:\$\$)*\K\s+/
+			result << unescape_str(head) unless head.empty?
+		end
+		result
+	end
+
 	class UpstreamWriter
 		def initialize(upstream, vars) @upstream, @vars = upstream, vars end
 
