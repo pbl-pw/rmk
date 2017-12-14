@@ -182,7 +182,7 @@ class Rmk
 			thr.join unless thr == Thread.current
 		end
 		puts 'Rmk: build end'
-		# @files_mid.each_key {|key| @files_mid.delete key unless @srcfiles.include? key}
+		@mid_storage.data!.each_key {|key| @mid_storage.data!.delete key unless @src_list_storage.data!.include? key}
 		@mid_storage.save
 		@dep_storage.data!.each_key {|key| @dep_storage.data!.delete key unless @outfiles.include? key}
 		@dep_storage.save
