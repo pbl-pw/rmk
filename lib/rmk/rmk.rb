@@ -8,19 +8,6 @@ class Rmk
 	# @return [String]
 	def self.normalize_path(path) path.gsub(?\\, ?/).sub(/^[a-z](?=:)/){|ch|ch.upcase} end
 
-	# split parms using un-escape space as separator
-	# @param line [String] str to split
-	# @param sep [String] regex for separator
-	# @return [Array<String>]
-	def self.split_parms(line, sep = '\s+')
-		result = []
-		until line.empty?
-			head, _, line = line.partition /(?<!\$)(?:\$\$)*\K#{sep}/
-			result << head unless head.empty?
-		end
-		result
-	end
-
 	# create Rmk object
 	# @param srcroot [String] source root dir,can be absolute or relative to output root(start with ..)
 	# @param outroot [String] output root dir,can be absolute or relative to pwd,default pwd

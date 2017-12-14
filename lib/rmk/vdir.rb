@@ -254,13 +254,14 @@ class Rmk::VDir
 			match = /^(?<rule>\w+)\s+(?<parms>.*)$/.match line
 			raise 'syntax error' unless match
 			raise "rule '#{match[:rule]}' undefined" unless @rules.include? match[:rule]
-			parms = Rmk.split_parms match[:parms], '>>'
-			raise "must have '>>' separator for separat input and output" unless (1 .. 2) === parms.size
-			iparms = Rmk.split_parms parms[0], '&'
-			raise 'input syntax error' unless (1..3) === iparms.size
+			parms = match[:parms].split /(?<!\$)(?:\$\$)*\K>>/
+			raise "must have only one '>>' separator for separat input and output" if parms.size > 2
+			ioregex = /(?<!\$)(?:\$\$)*\K&/
+			iparms = parms[0].split ioregex
+			raise 'input field count error' unless (1..3) === iparms.size
 			if parms[1]
-				oparms = Rmk.split_parms parms[1], '&'
-				raise 'output syntax error' unless (1..2) === oparms.size
+				oparms = parms[1].split ioregex
+				raise 'output field count error' unless (1..2) === oparms.size
 			else
 				oparms = []
 			end
