@@ -85,7 +85,7 @@ class Rmk
 		path, regex = split_path_pattern pattern
 		files = []
 		@files_mutex.synchronize do
-			next @outfiles.include?(path) ? [@outfiles[path]] : files unless regex
+			next (files << @outfiles[path] if @outfiles.include? path) unless regex
 			@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
 		end
 		files
