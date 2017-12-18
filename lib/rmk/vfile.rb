@@ -23,7 +23,7 @@ class Rmk::VFile
 	# @param path [String] file's absolute path, must be normalized
 	# @param vpath [String] file's virtual path
 	def initialize(rmk:, path:, vpath:nil, is_src:false)
-		@rmk, @path, @vpath, @is_src = rmk, path, vpath, is_src
+		@rmk, @path, @vpath, @is_src = rmk, path, vpath || nil, is_src
 		@input_ref_builds, @order_ref_builds = [], []
 		@output_ref_build = nil unless is_src
 	end
@@ -46,7 +46,7 @@ class Rmk::VFile
 	def change_to_out!(outfile)
 		raise "outfile '#{@path}' can't change to outfile" if src?
 		raise "outfile '#{@path}' can't change to srcfile" if outfile.src?
-		unless @path == outfile.path && (!@vpath || @vpath == outfile.vpath)
+		unless @path == outfile.path && @vpath == outfile.vpath
 			raise "srcfile '#{@path}' can't change to outfile '#{outfile.path}'"
 		end
 		@is_src = false

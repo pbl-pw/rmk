@@ -62,7 +62,8 @@ class Rmk
 				Dir[pattern].each do |fn|
 					next if @outfiles.include? fn
 					next files << @srcfiles[fn] if @srcfiles.include? fn
-					files << (@srcfiles[fn] = VFile.new rmk:self, path:fn, is_src:true)
+					files << (@srcfiles[fn] = VFile.new rmk:self, path:fn, is_src:true,
+						vpath:fn.start_with?(@srcroot) && fn[@srcroot.size + 1 .. -1])
 				end
 			end
 			[files, regex]
@@ -71,7 +72,8 @@ class Rmk
 				next @outfiles[path] if @outfiles.include? path
 				next @srcfiles[path] if @srcfiles.include? path
 				next unless ::File.exist? path
-				@srcfiles[path] = VFile.new rmk:self, path:path, is_src:true
+				@srcfiles[path] = VFile.new rmk:self, path:path, is_src:true,
+						vpath:path.start_with?(@srcroot) && path[@srcroot.size + 1 .. -1]
 			end
 			[file ? [file] : [], nil]
 		end
