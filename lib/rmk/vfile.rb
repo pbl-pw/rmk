@@ -2,7 +2,7 @@ require_relative 'rmk'
 
 # virtual file which represent a real OS file
 class Rmk::VFile
-	attr_reader :path, :vname, :vpath
+	attr_reader :path, :vpath
 	attr_accessor :is_src
 
 	def self.generate_modified_id(path) File.mtime(path).to_i end
@@ -21,11 +21,9 @@ class Rmk::VFile
 	# create VFile
 	# @param rmk [Rmk]
 	# @param path [String] file's absolute path, must be normalized
-	# @param vname [String] file's virtual name
 	# @param vpath [String] file's virtual path
-	def initialize(rmk:, path:, vname:nil, vpath:nil, is_src:false)
-		raise 'virtual file must set vpath' if vname && !vpath
-		@rmk, @path, @vname, @vpath, @is_src = rmk, path, vname, vpath, is_src
+	def initialize(rmk:, path:, vpath:nil, is_src:false)
+		@rmk, @path, @vpath, @is_src = rmk, path, vpath, is_src
 		@input_ref_builds, @order_ref_builds = [], []
 		@output_ref_build = nil unless is_src
 	end
@@ -51,7 +49,6 @@ class Rmk::VFile
 		unless @path == outfile.path && (!@vpath || @vpath == outfile.vpath)
 			raise "srcfile '#{@path}' can't change to outfile '#{outfile.path}'"
 		end
-		@vname = outfile.vname
 		@is_src = false
 		@input_ref_builds.concat outfile.input_ref_builds
 		@order_ref_builds.concat outfile.order_ref_builds

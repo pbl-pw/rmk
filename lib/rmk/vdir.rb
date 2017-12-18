@@ -32,6 +32,8 @@ class Rmk::VDir
 		@vars['outpath'] = @abs_out_path
 	end
 
+	def vpath; @virtual_path end
+
 	def include_subdir(path)
 		@subdirs[path] ||= Rmk::VDir.new @rmk, self, path
 	end
@@ -76,8 +78,7 @@ class Rmk::VDir
 	protected def find_srcfiles_imp(pattern)
 		::Dir[join_abs_src_path pattern].map! do |fn|
 			next @srcfiles[fn] if @srcfiles.include? fn
-			@srcfiles[fn] = @rmk.add_src_file path: fn,
-						vname:fn[@abs_src_path.size .. -1], vpath:fn[@rmk.srcroot.size + 1 .. -1]
+			@srcfiles[fn] = @rmk.add_src_file path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1]
 		end
 	end
 
@@ -110,7 +111,7 @@ class Rmk::VDir
 	# @param name file name, must relative to this dir
 	# @return [VFile] virtual file object
 	def add_out_file(name)
-		@outfiles[name] = @rmk.add_out_file vname:name, path:join_abs_out_path(name), vpath:join_virtual_path(name)
+		@outfiles[name] = @rmk.add_out_file path:join_abs_out_path(name), vpath:join_virtual_path(name)
 	end
 
 	private def begin_define_nonvar(indent)
@@ -272,8 +273,9 @@ class Rmk::VDir
 				iparms[0].each do |fn|
 					files, regex = find_inputfiles fn
 					files.each do |file|
+						stem = regex && (file.vpath&.[](@virtual_path.size + 1 .. -1) || file.path)[regex, 1]
 						build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], [file], iparms[1],
-							iparms[2], oparms[0], oparms[1], stem:regex && (file.vname || file.path)[regex, 1])
+							iparms[2], oparms[0], oparms[1], stem:stem)
 						@builds << build
 						vars << build.vars
 					end
