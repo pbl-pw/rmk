@@ -22,14 +22,18 @@ class Rmk::VDir
 		@srcfiles = {}
 		@outfiles = {}
 		@builds = []
-		@virtual_path = @parent&.join_virtual_path path
+		@virtual_path = @parent&.join_virtual_path("#{path}/")
 		Dir.mkdir @virtual_path if @virtual_path && !Dir.exist?(@virtual_path)
 		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path.to_s, ''
 		@abs_out_path = ::File.join @rmk.outroot, @virtual_path.to_s, ''
 		@vars = Rmk::Vars.new @rmk.vars
+		define_system_vars
+	end
+
+	private def define_system_vars
 		@vars['vpath'] = @virtual_path || '.'
-		@vars['srcpath'] = @abs_src_path
-		@vars['outpath'] = @abs_out_path
+		@vars['srcpath'] = @abs_src_path[0 .. -2]
+		@vars['outpath'] = @abs_out_path[0 .. -2]
 	end
 
 	def vpath; @virtual_path end
@@ -273,7 +277,7 @@ class Rmk::VDir
 				iparms[0].each do |fn|
 					files, regex = find_inputfiles fn
 					files.each do |file|
-						stem = regex && (file.vpath&.[](@virtual_path.size + 1 .. -1) || file.path)[regex, 1]
+						stem = regex && (file.vpath&.[](@virtual_path.size .. -1) || file.path)[regex, 1]
 						build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], [file], iparms[1],
 							iparms[2], oparms[0], oparms[1], stem:stem)
 						@builds << build
@@ -332,9 +336,7 @@ class Rmk::VDir
 			raise 'syntax error' if line
 			if @parent
 				@vars.merge! @parent.vars
-				@vars['vpath'] = @virtual_path || '.'
-				@vars['srcpath'] = @abs_src_path
-				@vars['outpath'] = @abs_out_path
+				define_system_vars
 				@rules.merge! @parent.rules
 			end
 		else

@@ -34,7 +34,7 @@ class Rmk::Build
 			file.vpath ? @dir.rmk.join_rto_src_path(file.vpath) : file.path
 		end.join ' '
 		if @infiles.size == 1 && @infiles[0].vpath
-			vname = @infiles[0].vpath[@dir.vpath.to_s.size + 1 .. -1]
+			vname = @infiles[0].vpath[@dir.vpath.to_s.size .. -1]
 			match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vname
 			@vars['in_dir'], @vars['in_nodir'] = match[1], match[2]
 			match = /^(.*)\.(.*)$/.match match[2]
