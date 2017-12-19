@@ -339,6 +339,16 @@ class Rmk::VDir
 				define_system_vars
 				@rules.merge! @parent.rules
 			end
+		when 'error'
+			state = begin_define_nonvar indent
+			$stderr.puts state[:vars].interpolate_str line
+			exit
+		when 'warn'
+			state = begin_define_nonvar indent
+			$stderr.puts state[:vars].interpolate_str line
+		when 'info'
+			state = begin_define_nonvar indent
+			puts state[:vars].interpolate_str line
 		else
 			match = /^(?:(?<append>\+=)|=)(?(<append>)|\s*)(?<value>.*)$/.match line
 			raise 'syntax error' unless match
