@@ -5,17 +5,17 @@ require 'iniparse'
 require "rmk"
 
 options = {}
-targets = OptionParser.new{ |opts|
+parser = OptionParser.new{ |opts|
 	opts.summary_width = 48
 	opts.banner = 'Usage: rmk [Options] [targets]'
 	opts.separator ''
-	opts.on '-C', '--directory=dir', 'output root dir,can be absolute or relative to pwd,default _Build' do |dir|
+	opts.on '-O', '--outdir=dir', 'output root dir,can be absolute or relative to pwd,default _Build' do |dir|
 		options[:outroot] = dir
 	end
-	opts.on '-S', '--source=dir', 'source root dir,can be absolute or relative to output root(start with ..),default ..' do |dir|
+	opts.on '-S', '--srcdir=dir', 'source root dir,can be absolute or relative to output root(start with ..),default ..' do |dir|
 		options[:srcroot] = dir
 	end
-	opts.on '-V', '--variant [x,y,z]', Array, 'variant list to build' do |list|
+	opts.on '-V', '--variant [x,y,z]', Array, 'variant list to build, empty for build all variants' do |list|
 		options[:variants] = list || []
 	end
 	opts.on '-h', '--help', 'show this help' do
@@ -23,10 +23,11 @@ targets = OptionParser.new{ |opts|
 		exit
 	end
 	opts.on '-v', '--version', 'show version' do
-		puts 'rmk 0.1.0', ''
+		puts 'rmk 0.2.0', ''
 		exit
 	end
-}.parse(ARGV)
+}
+targets = parser.parse(ARGV)
 if options[:variants]
 	raise "variants config file 'variants.rmk' not exist" unless File.exist? 'variants.rmk'
 	inifile = IniParse.open 'variants.rmk'
@@ -39,11 +40,36 @@ if options[:variants]
 		variant
 	}).each do |variant|
 		next unless variant
-		thrs << Thread.new{ system %|"#{exe}" "#{__FILE__}" -C"#{variant['outdir']}" -S"#{variant['srcdir']}" #{targets}|}
+		thrs << Thread.new{ system %|"#{exe}" "#{__FILE__}" -O"#{variant['outdir']}" -S"#{variant['srcdir']}" #{targets}|}
 	end
 	thrs.each{|thr| thr.join}
-else
-	rmk = Rmk.new srcroot:options[:srcroot] || '..', outroot:options[:outroot] || '_Build'
-	rmk.parse
-	rmk.build *targets
+	exit
 end
+if File.exist? 'ini.rmk'
+	inifile = IniParse.open 'ini.rmk'
+	dir, link = inifile['Outdir']['Path'], inifile['Outdir']['LinkTo']
+	if link
+		require 'win32ole'
+		require 'fileutils'
+		link = WIN32OLE.new('WScript.Shell').ExpandEnvironmentStrings(link).gsub! ?\/, ?\\
+		FileUtils.mkpath link unless Dir.exist? link
+		if File.symlink? dir
+			if File.readlink(dir) != link
+				Dir.rmdir dir
+				File.symlink link, dir
+			end
+		elsif Dir.exist?(dir) || File.exist?(dir)
+			raise "need symlink '#{dir}' as outroot, but file(or dir) '#{dir}' already exist"
+		else
+			FileUtils.mkpath File.dirname dir
+			File.symlink link, dir
+		end
+	else
+		FileUtils.mkpath dir
+	end
+	options[:srcroot] ||= inifile['Srcdir']['Path']
+	options[:outroot] ||= dir
+end
+rmk = Rmk.new srcroot:options[:srcroot] || '..', outroot:options[:outroot] || '_Build'
+rmk.parse
+rmk.build *targets
