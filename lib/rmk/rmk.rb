@@ -14,11 +14,12 @@ class Rmk
 	def initialize(srcroot:'', outroot:'')
 		@files_mutex = Thread::Mutex.new	# files operate mutex
 
-		@srcroot = Rmk.normalize_path(::File.absolute_path srcroot, outroot)
+		srcroot = Rmk.normalize_path srcroot
+		@outroot = File.join Rmk.normalize_path(File.absolute_path outroot), ''
+		@srcroot = File.join File.absolute_path(srcroot, @outroot), ''
 		raise "source path '#{@srcroot}' not exist or not directory" unless ::Dir.exist?(@srcroot)
-		@outroot = Rmk.normalize_path(::File.absolute_path outroot)
 		warn 'in-source build' if @outroot == @srcroot
-		@src_relative = srcroot.match?(/^\.\./) && Rmk.normalize_path(srcroot)
+		@src_relative = srcroot.match?(/^\.\./) && File.join(srcroot, '')
 		Dir.mkdir @outroot unless Dir.exist? @outroot
 		Dir.chdir @outroot
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
@@ -28,10 +29,10 @@ class Rmk
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
-		@vars = {'srcroot'=>@srcroot, 'outroot'=>@outroot, 'src_rto_root'=>@src_relative || @srcroot}
+		@vars = {'srcroot'=>@srcroot[0..-2], 'outroot'=>@outroot[0..-2], 'src_rto_root'=>(@src_relative || @srcroot)[0..-2]}
 		@virtual_root = Rmk::VDir.new self, nil
 	end
-	attr_reader :srcroot, :outroot, :src_relative, :vars, :virtual_root, :srcfiles, :outfiles
+	attr_reader :srcroot, :outroot, :vars, :virtual_root, :srcfiles, :outfiles
 	attr_reader :mid_storage, :dep_storage, :src_list_storage
 
 	# join src file path relative to out root, or absolute src path when not relative src
@@ -63,7 +64,7 @@ class Rmk
 					next if @outfiles.include? fn
 					next files << @srcfiles[fn] if @srcfiles.include? fn
 					files << (@srcfiles[fn] = VFile.new rmk:self, path:fn, is_src:true,
-						vpath:fn.start_with?(@srcroot) && fn[@srcroot.size + 1 .. -1])
+						vpath:fn.start_with?(@srcroot) && fn[@srcroot.size .. -1])
 				end
 			end
 			[files, regex]
@@ -73,7 +74,7 @@ class Rmk
 				next @srcfiles[path] if @srcfiles.include? path
 				next unless ::File.exist? path
 				@srcfiles[path] = VFile.new rmk:self, path:path, is_src:true,
-						vpath:path.start_with?(@srcroot) && path[@srcroot.size + 1 .. -1]
+						vpath:path.start_with?(@srcroot) && path[@srcroot.size .. -1]
 			end
 			[file ? [file] : [], nil]
 		end
@@ -141,7 +142,7 @@ class Rmk
 		else
 			files = tgts.map do |name|
 				file = Rmk.normalize_path name
-				file = @outfiles[File.join @outroot, file] || @srcfiles[File.join @srcroot, file]
+				file = @outfiles[File.absolute_path file, @outroot] || @srcfiles[File.absolute_path file, @srcroot]
 				raise "build target '#{name}' not found" unless file
 				file = file.input_ref_builds[0].outfiles[0] if file.src? && file.input_ref_builds.size == 1
 				file

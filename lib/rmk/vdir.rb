@@ -82,7 +82,7 @@ class Rmk::VDir
 	protected def find_srcfiles_imp(pattern)
 		::Dir[join_abs_src_path pattern].map! do |fn|
 			next @srcfiles[fn] if @srcfiles.include? fn
-			@srcfiles[fn] = @rmk.add_src_file path: fn, vpath:fn[@rmk.srcroot.size + 1 .. -1]
+			@srcfiles[fn] = @rmk.add_src_file path: fn, vpath:fn[@rmk.srcroot.size .. -1]
 		end
 	end
 

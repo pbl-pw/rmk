@@ -123,7 +123,7 @@ class Rmk::Build
 			return Rmk::Build.err_puts "Rmk: syntax of depend file '#{@vars['depfile']}' not support yet" unless files
 			@dir.rmk.dep_storage[@outfiles[0].path] = files
 			files.each do |file|
-				file = File.absolute_path file, @dir.rmk.outroot
+				file = File.absolute_path Rmk.normalize_path(file), @dir.rmk.outroot
 				next if @dir.rmk.srcfiles.include?(file) || @dir.rmk.outfiles.include?(file)
 				outs = @outfiles.map{|out| out.vpath || out.path}
 				@dir.rmk.src_list_storage.sync{|data| data[file] ? data[file].concat(outs) : data[file] = outs}
