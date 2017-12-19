@@ -15,8 +15,8 @@ targets = OptionParser.new{ |opts|
 	opts.on '-S', '--source=dir', 'source root dir,can be absolute or relative to output root(start with ..),default ..' do |dir|
 		options[:srcroot] = dir
 	end
-	opts.on '-V', '--variant x,y,z', Array, 'variant list to build' do |list|
-		options[:variants] = list
+	opts.on '-V', '--variant [x,y,z]', Array, 'variant list to build' do |list|
+		options[:variants] = list || []
 	end
 	opts.on '-h', '--help', 'show this help' do
 		puts opts
@@ -30,6 +30,18 @@ targets = OptionParser.new{ |opts|
 if options[:variants]
 	raise "variants config file 'variants.rmk' not exist" unless File.exist? 'variants.rmk'
 	inifile = IniParse.open 'variants.rmk'
+	targets = targets.map{|tgt| %|"#{tgt}"|}.join ' '
+	exe = File.join RbConfig::CONFIG['bindir'], RbConfig::CONFIG['ruby_install_name']
+	thrs = []
+	(options[:variants].empty? ? inifile : options[:variants].map!{|vn|
+		variant = inifile[vn]
+		warn "variant '#{vn}' doesn't exist" unless variant
+		variant
+	}).each do |variant|
+		next unless variant
+		thrs << Thread.new{ system %|"#{exe}" "#{__FILE__}" -C"#{variant['outdir']}" -S"#{variant['srcdir']}" #{targets}|}
+	end
+	thrs.each{|thr| thr.join}
 else
 	rmk = Rmk.new srcroot:options[:srcroot] || '..', outroot:options[:outroot] || '_Build'
 	rmk.parse
