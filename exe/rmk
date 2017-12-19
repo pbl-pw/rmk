@@ -1,9 +1,10 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
+require 'iniparse'
 require "rmk"
 
-options = {outroot:'_Build', srcroot:'..'}
+options = {}
 targets = OptionParser.new{ |opts|
 	opts.summary_width = 48
 	opts.banner = 'Usage: rmk [Options] [targets]'
@@ -14,6 +15,9 @@ targets = OptionParser.new{ |opts|
 	opts.on '-S', '--source=dir', 'source root dir,can be absolute or relative to output root(start with ..),default ..' do |dir|
 		options[:srcroot] = dir
 	end
+	opts.on '-V', '--variant x,y,z', Array, 'variant list to build' do |list|
+		options[:variants] = list
+	end
 	opts.on '-h', '--help', 'show this help' do
 		puts opts
 		exit
@@ -23,6 +27,11 @@ targets = OptionParser.new{ |opts|
 		exit
 	end
 }.parse(ARGV)
-rmk = Rmk.new srcroot:options[:srcroot], outroot:options[:outroot]
-rmk.parse
-rmk.build *targets
+if options[:variants]
+	raise "variants config file 'variants.rmk' not exist" unless File.exist? 'variants.rmk'
+	inifile = IniParse.open 'variants.rmk'
+else
+	rmk = Rmk.new srcroot:options[:srcroot] || '..', outroot:options[:outroot] || '_Build'
+	rmk.parse
+	rmk.build *targets
+end
