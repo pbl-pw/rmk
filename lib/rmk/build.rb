@@ -103,7 +103,10 @@ class Rmk::Build
 		@vars['depfile'] ||= (@outfiles[0].vpath || @outfiles[0].path) + '.dep' if @vars['deptype']
 		cmd = @vars.interpolate_str @vars['command'] || @rule.command
 		unless /^\s*$/.match? cmd
-			std, err, result = Open3.capture3 cmd
+			env = {}
+			env['PATH'] = @vars['PATH_prepend'] + ENV['PATH'] if @vars['PATH_prepend']
+			@vars['ENV_export'].split(/\s+/).each{|name| env[name] = @vars[name] if @vars.include? name} if @vars['ENV_export']
+			std, err, result = env.empty? ? Open3.capture3(cmd) : Open3.capture3(env, cmd)
 			std = std.empty? ? @vars['echo'] || cmd : (@vars['echo'] || cmd) + ?\n + std
 			if result.exitstatus != 0
 				err = "execute faild: '#{cmd}'" if err.empty?
