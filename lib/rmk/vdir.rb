@@ -253,12 +253,12 @@ class Rmk::VDir
 			raise "rule '#{match[:name]}' has been defined" if @rules.include? match[:name]
 			rule = @rules[match[:name]] = Rmk::Rule.new state[:vars], command:match[:command]
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:rule.vars}
-		when /^build(each)?$/
-			eachmode = Regexp.last_match 1
+		when /^exec$/
 			state = begin_define_nonvar indent
-			match = /^(?<rule>\w+)\s+(?<parms>.*)$/.match line
+			match = /^(?<rule>\w+)(?<each>\s+each)?:\s*(?<parms>.*)$/.match line
 			raise 'syntax error' unless match
 			raise "rule '#{match[:rule]}' undefined" unless @rules.include? match[:rule]
+			eachmode = match[:each]
 			parms = match[:parms].split /(?<!\$)(?:\$\$)*\K>>/
 			raise "must have only one '>>' separator for separat input and output" if parms.size > 2
 			ioregex = /(?<!\$)(?:\$\$)*\K&/
