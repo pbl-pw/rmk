@@ -267,8 +267,8 @@ class Rmk::VDir
 			ioregex = /(?<!\$)(?:\$\$)*\K&/
 			iparms = parms[0].split ioregex
 			raise 'input field count error' unless (1..3) === iparms.size
-			if parms[1]
-				oparms = parms[1].split ioregex
+			if parms[1] && !parms[1].empty?
+				oparms = parms[1].lstrip!.split ioregex
 				raise 'output field count error' unless (1..2) === oparms.size
 			else
 				oparms = []
