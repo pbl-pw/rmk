@@ -49,9 +49,8 @@ if File.exist? 'ini.rmk'
 	inifile = IniParse.open 'ini.rmk'
 	dir, link = inifile['Outdir']['Path'], inifile['Outdir']['LinkTo']
 	if link
-		require 'win32ole'
 		require 'fileutils'
-		link = WIN32OLE.new('WScript.Shell').ExpandEnvironmentStrings(link).gsub! ?\/, ?\\
+		link = link.gsub(/\$(?:(\$)|{(.*?)})/){$1 || ENV[$2]}.gsub! ?\/, ?\\
 		FileUtils.mkpath link unless Dir.exist? link
 		if File.symlink? dir
 			if File.readlink(dir) != link
