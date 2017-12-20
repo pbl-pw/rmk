@@ -22,6 +22,7 @@ class Rmk::VDir
 		@srcfiles = {}
 		@outfiles = {}
 		@builds = []
+		@collects = {}
 		@virtual_path = @parent&.join_virtual_path("#{path}/")
 		Dir.mkdir @virtual_path if @virtual_path && !Dir.exist?(@virtual_path)
 		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path.to_s, ''
@@ -37,6 +38,8 @@ class Rmk::VDir
 	end
 
 	def vpath; @virtual_path end
+
+	def collects(name) @collects[name] ||= [] end
 
 	def include_subdir(path)
 		@subdirs[path] ||= Rmk::VDir.new @rmk, self, path
@@ -260,7 +263,7 @@ class Rmk::VDir
 			raise "rule '#{match[:rule]}' undefined" unless @rules.include? match[:rule]
 			eachmode = match[:each]
 			parms = match[:parms].split /(?<!\$)(?:\$\$)*\K>>/
-			raise "must have only one '>>' separator for separat input and output" if parms.size > 2
+			raise "syntax error, use '>>' to separat input and output and collect" unless (1 .. 3) === parms.size
 			ioregex = /(?<!\$)(?:\$\$)*\K&/
 			iparms = parms[0].split ioregex
 			raise 'input field count error' unless (1..3) === iparms.size
@@ -269,6 +272,10 @@ class Rmk::VDir
 				raise 'output field count error' unless (1..2) === oparms.size
 			else
 				oparms = []
+			end
+			if parms[2]
+				parms[2] = parms[2][/^\s*(\S*)\s*$/, 1]
+				raise 'syntax error' unless parms[2]
 			end
 			iparms[0] = state[:vars].split_str iparms[0]
 			raise 'must have input file' if iparms[0].size == 0
@@ -279,7 +286,7 @@ class Rmk::VDir
 					files.each do |file|
 						stem = regex && (file.vpath&.[](@virtual_path.size .. -1) || file.path)[regex, 1]
 						build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], [file], iparms[1],
-							iparms[2], oparms[0], oparms[1], stem:stem)
+							iparms[2], oparms[0], oparms[1], parms[2], stem:stem)
 						@builds << build
 						vars << build.vars
 					end
@@ -287,11 +294,23 @@ class Rmk::VDir
 			else
 				files = []
 				iparms[0].each {|fn| files.concat find_inputfiles(fn)[0]}
-				build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], files, iparms[1], iparms[2], oparms[0], oparms[1])
+				build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], files, iparms[1], iparms[2],
+					oparms[0], oparms[1], parms[2])
 				@builds << build
 				vars = build.vars
 			end
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:vars}
+		when 'collect'
+			state = begin_define_nonvar indent
+			parms = line.split /(?<!\$)(?:\$\$)*\K>>/
+			raise "must have only one '>>' separator for separat input and output" unless parms.size == 2
+			collect = parms[1][/^\s*(\S*)\s*$/, 1]
+			raise 'syntax error' unless collect
+			collect = collects collect
+			state[:vars].split_str(parms[0]).each do |fn|
+				files, _ = find_inputfiles fn
+				collect.concat files
+			end
 		when 'default'
 			state = begin_define_nonvar indent
 			parms = state[:vars].split_str line

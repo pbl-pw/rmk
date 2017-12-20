@@ -16,7 +16,8 @@ class Rmk::Build
 	# @param order_only_input [String, nil] order-only input raw string
 	# @param output [String, nil] output raw string
 	# @param implicit_output [String, nil] implicit output raw string
-	def initialize(dir, rule, vars, input, implicit_input, order_only_input, output, implicit_output, stem:nil)
+	# @param collect [String, nil] collect name
+	def initialize(dir, rule, vars, input, implicit_input, order_only_input, output, implicit_output, collect, stem:nil)
 		@mutex = Thread::Mutex.new
 		@updatedcnt = 0		# input file updated count
 		@runed = false			# build has been runed
@@ -62,8 +63,9 @@ class Rmk::Build
 			file.output_ref_build = self
 			@outfiles << file
 		end
-		output = @rule['out'] || raise('must have output') unless output
+		output = @rule['out'] || raise('must have output') unless output && !output.empty?
 		@vars.split_str(output).each &regout
+		@dir.collects(collect).concat @outfiles
 		@vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
 		@vars['out_noext'] = @vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
 		@rule.vars.each {|name, str| @vars_we[name] = @vars.interpolate_str str}	# interpolate rule's vars to self
