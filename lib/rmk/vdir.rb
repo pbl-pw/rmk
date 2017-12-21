@@ -262,20 +262,21 @@ class Rmk::VDir
 			raise 'syntax error' unless match
 			raise "rule '#{match[:rule]}' undefined" unless @rules.include? match[:rule]
 			eachmode = match[:each]
-			parms = match[:parms].split /(?<!\$)(?:\$\$)*\K>>/
+			parms = match[:parms].split /(?<!\$)(?:\$\$)*\K>>/, -1
 			raise "syntax error, use '>>' to separat input and output and collect" unless (1 .. 3) === parms.size
 			ioregex = /(?<!\$)(?:\$\$)*\K&/
 			iparms = parms[0].split ioregex
 			raise 'input field count error' unless (1..3) === iparms.size
 			if parms[1] && !parms[1].empty?
-				oparms = parms[1].lstrip!.split ioregex
+				oparms = parms[1].lstrip.split ioregex
 				raise 'output field count error' unless (1..2) === oparms.size
 			else
+				raise 'syntax error: must give output field after >>' if parms[1] && !parms[2]
 				oparms = []
 			end
 			if parms[2]
 				parms[2] = parms[2][/^\s*(\S*)\s*$/, 1]
-				raise 'syntax error' unless parms[2]
+				raise 'must give collection name' if parms[2].empty?
 			end
 			iparms[0] = state[:vars].split_str iparms[0]
 			raise 'must have input file' if iparms[0].size == 0
