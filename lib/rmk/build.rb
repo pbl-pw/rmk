@@ -35,7 +35,8 @@ class Rmk::Build
 			file.vpath ? @dir.rmk.join_rto_src_path(file.vpath) : file.path
 		end.join ' '
 		if @infiles.size == 1 && @infiles[0].vpath
-			vname = @infiles[0].vpath[@dir.vpath.to_s.size .. -1]
+			vname = @infiles[0].vpath
+			vname = vname[@dir.vpath.size .. -1] if @dir.vpath && vname.start_with?(@dir.vpath)
 			match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vname
 			@vars['in_dir'], @vars['in_nodir'] = match[1], match[2]
 			match = /^(.*)\.(.*)$/.match match[2]
@@ -59,7 +60,7 @@ class Rmk::Build
 
 		@outfiles = []
 		regout = proc do |fn|
-			file = dir.add_out_file fn
+			file = @dir.add_out_file fn
 			file.output_ref_build = self
 			@outfiles << file
 		end
@@ -148,9 +149,11 @@ class Rmk::Build
 		while lid < lines.size
 			joinline = line.sub! /(?<!\\)(?:\\\\)*\K\\\n\z/,''
 			parms = line.split /(?<!\\)(?:\\\\)*\K\s+/
-			parms.delete_at 0 if parms[0].empty?
-			parms.map!{|parm| File.absolute_path parm.gsub(/\\(.)/, '\1')}
-			files.concat parms
+			unless parms.empty?
+				parms.delete_at 0 if parms[0].empty?
+				parms.map!{|parm| File.absolute_path parm.gsub(/\\(.)/, '\1')}
+				files.concat parms
+			end
 			break unless joinline
 			lid += 1
 			line = lines[lid]

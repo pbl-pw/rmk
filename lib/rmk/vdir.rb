@@ -32,7 +32,7 @@ class Rmk::VDir
 	end
 
 	private def define_system_vars
-		@vars['vpath'] = @virtual_path || '.'
+		@vars['vpath'] = @virtual_path&.[](0 .. -2) || '.'
 		@vars['srcpath'] = @abs_src_path[0 .. -2]
 		@vars['outpath'] = @abs_out_path[0 .. -2]
 	end
@@ -116,10 +116,14 @@ class Rmk::VDir
 	end
 
 	# add a output file
-	# @param name file name, must relative to this dir
+	# @param name file name, relative to this dir when not absolute path
 	# @return [VFile] virtual file object
 	def add_out_file(name)
-		@outfiles[name] = @rmk.add_out_file path:join_abs_out_path(name), vpath:join_virtual_path(name)
+		if /^[A-Z]:/.match? name
+			@rmk.add_out_file path:name, vpath: name.start_with?(@rmk.outroot) && name[@rmk.outroot.size .. - 1]
+		else
+			@outfiles[name] = @rmk.add_out_file path:join_abs_out_path(name), vpath:join_virtual_path(name)
+		end
 	end
 
 	private def begin_define_nonvar(indent)
