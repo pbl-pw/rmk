@@ -22,7 +22,7 @@ class Rmk::VDir
 		@srcfiles = {}
 		@outfiles = {}
 		@builds = []
-		@collects = {}
+		@collections = {}
 		@virtual_path = @parent&.join_virtual_path("#{path}/")
 		Dir.mkdir @virtual_path if @virtual_path && !Dir.exist?(@virtual_path)
 		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path.to_s, ''
@@ -39,7 +39,7 @@ class Rmk::VDir
 
 	def vpath; @virtual_path end
 
-	def collects(name) @collects[name] ||= [] end
+	def collections(name) @collections[name] ||= [] end
 
 	def include_subdir(path)
 		@subdirs[path] ||= Rmk::VDir.new @rmk, self, path
@@ -304,12 +304,12 @@ class Rmk::VDir
 			state = begin_define_nonvar indent
 			parms = line.split /(?<!\$)(?:\$\$)*\K>>/
 			raise "must have only one '>>' separator for separat input and output" unless parms.size == 2
-			collect = parms[1][/^\s*(\S*)\s*$/, 1]
-			raise 'syntax error' unless collect
-			collect = collects collect
+			collection = parms[1][/^\s*(\S*)\s*$/, 1]
+			raise 'syntax error' unless collection
+			collection = collections collection
 			state[:vars].split_str(parms[0]).each do |fn|
 				files, _ = find_inputfiles fn
-				collect.concat files
+				collection.concat files
 			end
 		when 'default'
 			state = begin_define_nonvar indent
