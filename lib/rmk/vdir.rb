@@ -99,6 +99,7 @@ class Rmk::VDir
 			@outfiles.each{|k,v| files << v if k.start_with?(path) && k[path.size .. -1].match?(regex)}
 		else
 			files << @outfiles[path] if @outfiles.include? path
+			files.concat @collections[path] if @collections.include? path
 		end
 		return files unless path.sub! /^([^\/]+)\//, ''
 		subdir = $1
