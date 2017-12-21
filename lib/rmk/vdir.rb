@@ -275,8 +275,11 @@ class Rmk::VDir
 				oparms = []
 			end
 			if parms[2]
-				parms[2] = parms[2][/^\s*(\S*)\s*$/, 1]
+				parms[2] = state[:vars].split_str(parms[2].lstrip).map!{|name| collections name}
 				raise 'must give collection name' if parms[2].empty?
+			else
+				parms[2] = @rules[match[:rule]]['collection']&.lstrip
+				parms[2] = state[:vars].split_str(parms[2]).map!{|name| collections name} if parms[2]
 			end
 			iparms[0] = state[:vars].split_str iparms[0]
 			raise 'must have input file' if iparms[0].size == 0
@@ -305,12 +308,11 @@ class Rmk::VDir
 			state = begin_define_nonvar indent
 			parms = line.split /(?<!\$)(?:\$\$)*\K>>/
 			raise "must have only one '>>' separator for separat input and output" unless parms.size == 2
-			collection = parms[1][/^\s*(\S*)\s*$/, 1]
-			raise 'syntax error' unless collection
-			collection = collections collection
+			collection = state[:vars].split_str(parms[1].lstrip).map!{|name| collections name}
+			raise 'must give collection name' if collection.empty?
 			state[:vars].split_str(parms[0]).each do |fn|
 				files, _ = find_inputfiles fn
-				collection.concat files
+				collection.each{|col| col.concat files}
 			end
 		when 'default'
 			state = begin_define_nonvar indent

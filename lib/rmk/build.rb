@@ -65,8 +65,7 @@ class Rmk::Build
 		end
 		output = @rule['out'] || raise('must have output') unless output
 		@vars.split_str(output).each &regout
-		collection ||= @rule['collection']
-		@dir.collections(collection).concat @outfiles if collection
+		collection.each{|col| col.concat @outfiles} if collection
 		@vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
 		@vars['out_noext'] = @vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
 		@rule.vars.each {|name, str| @vars_we[name] = @vars.interpolate_str str}	# interpolate rule's vars to self
