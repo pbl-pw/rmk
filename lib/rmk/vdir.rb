@@ -293,7 +293,7 @@ class Rmk::VDir
 				iparms[0].each do |fn|
 					files, regex = find_inputfiles fn
 					files.each do |file|
-						stem = regex && (file.vpath&.[](@virtual_path.size .. -1) || file.path)[regex, 1]
+						stem = regex && File.basename(file.vpath&.[](@virtual_path.size .. -1) || file.path)[regex, 1]
 						build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], [file], iparms[1],
 							iparms[2], oparms[0], oparms[1], parms[2], stem:stem)
 						@builds << build
