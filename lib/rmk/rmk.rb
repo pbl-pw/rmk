@@ -43,11 +43,11 @@ class Rmk
 	# when pattern include '*', return [dir part, file(or dir) match regex, post dir part, post file part]
 	# ;otherwise return [origin pattern, nil, nil, nil]
 	def split_path_pattern(pattern)
-		match = /^([a-zA-Z]:\/(?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)\/((?:[^\/*]+\/)*+)([^\/*]*+))?$/.match pattern
+		match = /^([a-zA-Z]:\/(?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)(\/(?:[^\/*]+\/)*+[^\/*]++)?)$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
-		dir, prefix, postfix, postdir, postfile = *match[1..5]
+		dir, prefix, postfix, postpath = *match[1..5]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
-		[regex ? dir : pattern, regex, postdir, postfile]
+		[regex ? dir : pattern, regex, postpath]
 	end
 
 	# find files which can be build's imput file
@@ -55,7 +55,7 @@ class Rmk
 	# @return [Array(Array<Hash>, <Regex,nil>)] return [files, regex], or [files, nil] when not include '*' pattern
 	def find_inputfiles(pattern)
 		pattern = Rmk.normalize_path pattern
-		path, regex = split_path_pattern pattern
+		path, regex, postpath = split_path_pattern pattern
 		if regex
 			files = []
 			@files_mutex.synchronize do

@@ -60,11 +60,11 @@ class Rmk::VDir
 	# when pattern include '*', return [dir part, file(or dir) match regex, post dir part, post file part]
 	# ;otherwise return [origin pattern, nil, nil, nil]
 	def split_vpath_pattern(pattern)
-		match = /^((?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)\/((?:[^\/*]+\/)*+)([^\/*]*+))?$/.match pattern
+		match = /^((?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)(\/(?:[^\/*]+\/)*+[^\/*]++)?)$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
-		dir, prefix, postfix, postdir, postfile = *match[1..5]
+		dir, prefix, postfix, postpath = *match[1..4]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
-		[regex ? dir : pattern, regex, postdir, postfile]
+		[regex ? dir : pattern, regex, postpath]
 	end
 
 	# find files which can be build's imput file
@@ -74,9 +74,9 @@ class Rmk::VDir
 	def find_inputfiles(pattern)
 		return @rmk.find_inputfiles pattern if pattern.match? /^[A-Z]:/
 		pattern = Rmk.normalize_path pattern
-		dir, regex = split_vpath_pattern pattern
+		dir, regex, postpath = split_vpath_pattern pattern
 		files = find_srcfiles_imp pattern
-		files.concat find_outfiles_imp  dir, regex
+		files.concat find_outfiles_imp  dir, regex, postpath
 		[files, regex]
 	end
 
@@ -94,18 +94,33 @@ class Rmk::VDir
 	# @param path [String] virtual path, if regex, path must be dir(end with '/') or empty, otherwise contrary
 	# @param regex [Regexp, nil] if not nil, file match regexp
 	# @return [Array<Hash>]
-	protected def find_outfiles_imp(path, regex)
+	protected def find_outfiles_imp(path, regex, postpath)
 		files = []
 		if regex
-			@outfiles.each{|k,v| files << v if k.start_with?(path) && k[path.size .. -1].match?(regex)}
+			if postpath
+				@outfiles.each do |k, v|
+					files << v if k.start_with?(path) && k.end_with?(postpath) && k[path.size .. -postpath.size-1].match?(regex)
+				end
+				@collections.each do |k, v|
+					files.concat v if k.start_with?(path) && k.end_with?(postpath) && k[path.size .. -postpath.size-1].match?(regex)
+				end
+			else
+				@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
+				@collections.each {|k, v| files.concat v if k.start_with?(path) && k[path.size..-1].match?(regex)}
+			end
 		else
 			files << @outfiles[path] if @outfiles.include? path
 			files.concat @collections[path] if @collections.include? path
 		end
-		return files unless path.sub! /^([^\/]+)\//, ''
-		subdir = $1
-		return files unless @subdirs.include? subdir
-		files + @subdirs[subdir].find_outfiles_imp(path, regex)
+		if path.sub! /^([^\/]+)\//, ''
+			subdir = $1
+			return files unless @subdirs.include? subdir
+			files.concat @subdirs[subdir].find_outfiles_imp(path, regex, postpath)
+		elsif postpath
+			postpath.sub! /^\//, ''
+			@subdirs.each{|k, v| files.concat v.find_outfiles_imp(postpath, nil, nil) if k.match? regex}
+		end
+		files
 	end
 
 	# find files which must be build's output
