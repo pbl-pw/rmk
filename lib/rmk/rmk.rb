@@ -40,14 +40,14 @@ class Rmk
 
 	# split path pattern to dir part and file match regex part
 	# @param pattern [String] absolute path, can include '*' to match any char at last no dir part
-	# @return [Array(String, <Regex, nil>)] when pattern include '*', return [dir part, file match regex]
-	# ;otherwise return [origin pattern, nil]
+	# when pattern include '*', return [dir part, file(or dir) match regex, post dir part, post file part]
+	# ;otherwise return [origin pattern, nil, nil, nil]
 	def split_path_pattern(pattern)
-		match = /^([a-zA-Z]:\/(?:[^\/*]+\/)*)([^\/*]*)(?:\*([^\/*]*))?$/.match pattern
+		match = /^([a-zA-Z]:\/(?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)\/((?:[^\/*]+\/)*+)([^\/*]*+))?$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
-		dir, prefix, postfix = *match[1..3]
+		dir, prefix, postfix, postdir, postfile = *match[1..5]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
-		[regex ? dir : pattern, regex]
+		[regex ? dir : pattern, regex, postdir, postfile]
 	end
 
 	# find files which can be build's imput file
