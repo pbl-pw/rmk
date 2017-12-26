@@ -84,33 +84,33 @@ class Rmk::VDir
 	# @param pattern [String] virtual path, can include '*' to match any char at last no dir part
 	# @return [Array<Hash>]
 	protected def find_srcfiles_imp(pattern)
-		::Dir[join_abs_src_path pattern].map! do |fn|
-			next @srcfiles[fn] if @srcfiles.include? fn
-			@srcfiles[fn] = @rmk.add_src_file path: fn, vpath:fn[@rmk.srcroot.size .. -1]
+		Dir[join_virtual_path(pattern), base: @rmk.srcroot].map! do |vp|
+			@rmk.add_src_file path: @rmk.join_abs_src_path(vp), vpath:vp
 		end
 	end
 
 	# find outfiles raw implement(assume all parms valid)
 	# @param path [String] virtual path, if regex, path must be dir(end with '/') or empty, otherwise contrary
-	# @param regex [Regexp, nil] if not nil, file match regexp
-	# @return [Array<Hash>]
+	# @param regex [Regexp, nil] if not nil, file match regexp, or dir match regexp when postpath not nil
+	# @param postpath [String, nil] path after dir match regexp
+	# @return [Array<VFile>]
 	protected def find_outfiles_imp(path, regex, postpath)
 		files = []
-		if regex
-			dir = path.split('/').inject(self){|obj, dn| obj&.subdirs[dn]}
-			return files unless dir
-			if postpath
-				dir.subdirs.each {|name, obj| files.concat obj.find_outfiles_imp(postpath, nil, nil) if name.match? regex}
-			else
-				dir.outfiles.each {|k, v| files << v if k.match? regex}
-				dir.collections.each {|k, v| files.concat v if k.match? regex}
-			end
-		else
+		unless regex
 			path = path.split '/'
 			dir = path[0..-2].inject(self){|obj, dn| obj&.subdirs[dn]}
 			return files unless dir
 			files << dir.outfiles[path[-1]] if dir.outfiles.include? path[-1]
 			files.concat dir.collections[path[-1]] if dir.collections.include? path[-1]
+			return files
+		end
+		dir = path.split('/').inject(self){|obj, dn| obj&.subdirs[dn]}
+		return files unless dir
+		if postpath
+			dir.subdirs.each {|name, obj| files.concat obj.find_outfiles_imp(postpath, nil, nil) if name.match? regex}
+		else
+			dir.outfiles.each {|k, v| files << v if k.match? regex}
+			dir.collections.each {|k, v| files.concat v if k.match? regex}
 		end
 		files
 	end

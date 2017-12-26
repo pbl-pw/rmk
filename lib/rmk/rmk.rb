@@ -35,6 +35,8 @@ class Rmk
 	attr_reader :srcroot, :outroot, :vars, :virtual_root, :srcfiles, :outfiles
 	attr_reader :mid_storage, :dep_storage, :src_list_storage
 
+	def join_abs_src_path(path) File.join @srcroot, path end
+
 	# join src file path relative to out root, or absolute src path when not relative src
 	def join_rto_src_path(path) ::File.join @src_relative ? @src_relative : @srcroot, path end
 
@@ -43,7 +45,7 @@ class Rmk
 	# when pattern include '*', return [dir part, file(or dir) match regex, post dir part, post file part]
 	# ;otherwise return [origin pattern, nil, nil, nil]
 	def split_path_pattern(pattern)
-		match = /^([a-zA-Z]:\/(?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)\/((?:[^\/*]+\/)*+[^\/*]++))?$/.match pattern
+		match = /^([a-zA-Z]:\/(?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)(\/(?:[^\/*]+\/)*+[^\/*]++)?)$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
 		dir, prefix, postfix, postpath = *match[1..5]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
@@ -59,7 +61,7 @@ class Rmk
 		if regex
 			files = []
 			@files_mutex.synchronize do
-				@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
+				find_outfiles_imp files, path, regex, postpath
 				Dir[pattern].each do |fn|
 					next if @outfiles.include? fn
 					next files << @srcfiles[fn] if @srcfiles.include? fn
@@ -72,7 +74,7 @@ class Rmk
 			file = @files_mutex.synchronize do
 				next @outfiles[path] if @outfiles.include? path
 				next @srcfiles[path] if @srcfiles.include? path
-				next unless ::File.exist? path
+				next unless File.exist? path
 				@srcfiles[path] = VFile.new rmk:self, path:path, is_src:true,
 						vpath:path.start_with?(@srcroot) && path[@srcroot.size .. -1]
 			end
@@ -84,14 +86,25 @@ class Rmk
 	# @param pattern [String] absolute path to find out files which can include '*' to match any char at last no dir part
 	# @return [Array<Hash>] return Array of file, and Regex when has '*' pattern
 	def find_outfiles(pattern)
-		pattern = Rmk.normalize_path pattern
-		path, regex = split_path_pattern pattern
+		path, regex, postpath = split_path_pattern Rmk.normalize_path pattern
 		files = []
 		@files_mutex.synchronize do
 			next (files << @outfiles[path] if @outfiles.include? path) unless regex
-			@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
+			find_outfiles_imp files, path, regex, postpath
 		end
 		files
+	end
+
+	# find outfiles raw implement(assume all parms valid)
+	# @param files [Array<VFile>] array to store finded files
+	# @param path [String] absolute path, path must be dir(end with '/') or empty
+	# @param regex [Regexp] file match regexp, or dir match regexp when postpath not nil
+	# @param postpath [String, nil] path after dir match regexp
+	private def find_outfiles_imp(files, path, regex, postpath)
+		return @outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)} unless postpath
+		@outfiles.each do |k, v|
+			files << v if k.start_with?(path) && k.end_with?(postpath) && k[path.size..-1-postpath.size].match?(regex)
+		end
 	end
 
 	# register a out file
