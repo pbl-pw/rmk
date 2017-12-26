@@ -69,3 +69,6 @@ class Rmk::VFile
 		updated! true
 	end
 end
+
+# Finded file struct
+FFile = Struct.new :vfile, :vname, :stem

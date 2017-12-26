@@ -70,12 +70,13 @@ class Rmk::VDir
 	# find files which can be build's imput file
 	# @param pattern [String] virtual path to find src and out files which can include '*' to match any char at last no dir part
 	# ;or absolute path to find a src file which not in src tree
-	# @return [Array(Array<Hash>, <Regex,nil>)] return [files, regex], or [files, nil] when not include '*' pattern
-	def find_inputfiles(pattern)
-		return @rmk.find_inputfiles pattern if pattern.match? /^[A-Z]:/
+	# @param ffile [Boolean] return FFile struct or not
+	# @return [Array<VFile, FFile>] return array of FFile when ffile, otherwise array of VFile
+	def find_inputfiles(pattern, ffile:false)
+		return @rmk.find_inputfiles pattern, ffile:ffile if pattern.match? /^[A-Z]:/
 		pattern = Rmk.normalize_path pattern
 		dir, regex, postpath = split_vpath_pattern pattern
-		files = find_srcfiles_imp pattern
+		files = find_srcfiles_imp pattern, dir, regex, postpath, ffile:ffile
 		files.concat find_outfiles_imp  dir, regex, postpath
 		[files, regex]
 	end
@@ -83,9 +84,9 @@ class Rmk::VDir
 	# find srcfiles raw implement(assume all parms valid)
 	# @param pattern [String] virtual path, can include '*' to match any char at last no dir part
 	# @return [Array<Hash>]
-	protected def find_srcfiles_imp(pattern)
-		Dir[join_virtual_path(pattern), base: @rmk.srcroot].map! do |vp|
-			@rmk.add_src_file path: @rmk.join_abs_src_path(vp), vpath:vp
+	protected def find_srcfiles_imp(pattern, dir, regex, postpath, ffile:false)
+		Dir[pattern, base: @abs_src_path].map! do |vn|
+			@rmk.add_src_file path:join_abs_src_path(vn), vpath:join_virtual_path(vn)
 		end
 	end
 

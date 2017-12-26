@@ -54,8 +54,9 @@ class Rmk
 
 	# find files which can be build's imput file
 	# @param pattern [String] absolute path to find src and out files which can include '*' to match any char at last no dir part
-	# @return [Array(Array<Hash>, <Regex,nil>)] return [files, regex], or [files, nil] when not include '*' pattern
-	def find_inputfiles(pattern)
+	# @param ffile [Boolean] return FFile struct or not
+	# @return [Array<VFile, FFile>] return array of FFile when ffile, otherwise array of VFile
+	def find_inputfiles(pattern, ffile:false)
 		pattern = Rmk.normalize_path pattern
 		path, regex, postpath = split_path_pattern pattern
 		if regex
