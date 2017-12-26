@@ -60,7 +60,7 @@ class Rmk::VDir
 	# when pattern include '*', return [dir part, file(or dir) match regex, post dir part, post file part]
 	# ;otherwise return [origin pattern, nil, nil, nil]
 	def split_vpath_pattern(pattern)
-		match = /^((?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)\/((?:[^\/*]+\/)*+[^\/*]++))?$/.match pattern
+		match = /^((?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)(\/(?:[^\/*]+\/)*+[^\/*]++)?)$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
 		dir, prefix, postfix, postpath = *match[1..4]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
@@ -77,7 +77,7 @@ class Rmk::VDir
 		pattern = Rmk.normalize_path pattern
 		dir, regex, postpath = split_vpath_pattern pattern
 		files = find_srcfiles_imp pattern, dir, regex, postpath, ffile:ffile
-		files.concat find_outfiles_imp  dir, regex, postpath
+		files.concat find_outfiles_imp  dir, regex, postpath, ffile:ffile
 		[files, regex]
 	end
 
@@ -85,8 +85,16 @@ class Rmk::VDir
 	# @param pattern [String] virtual path, can include '*' to match any char at last no dir part
 	# @return [Array<Hash>]
 	protected def find_srcfiles_imp(pattern, dir, regex, postpath, ffile:false)
-		Dir[pattern, base: @abs_src_path].map! do |vn|
-			@rmk.add_src_file path:join_abs_src_path(vn), vpath:join_virtual_path(vn)
+		return Dir[join_virtual_path(pattern), base: @rmk.srcroot].map! do |vp|
+			@rmk.add_src_file path:@rmk.join_abs_src_path(vp), vpath:vp
+		end unless ffile
+		return Dir[pattern, base:@abs_src_path].map! do |vn|
+			FFile.new @rmk.add_src_file(path:join_abs_src_path(vn), vpath:join_virtual_path(vn)), vn, nil
+		end unless regex
+		range = dir.size .. postpath ? -1 - postpath.size : -1
+		Dir[pattern, base:@abs_src_path].map! do |vn|
+			file = @rmk.add_src_file path:join_abs_src_path(vn), vpath:join_virtual_path(vn)
+			FFile.new file, vn, vn[range][regex, 1]
 		end
 	end
 
@@ -95,23 +103,32 @@ class Rmk::VDir
 	# @param regex [Regexp, nil] if not nil, file match regexp, or dir match regexp when postpath not nil
 	# @param postpath [String, nil] path after dir match regexp
 	# @return [Array<VFile>]
-	protected def find_outfiles_imp(path, regex, postpath)
+	protected def find_outfiles_imp(path, regex, postpath, ffile:false)
 		files = []
 		unless regex
 			path = path.split '/'
 			dir = path[0..-2].inject(self){|obj, dn| obj&.subdirs[dn]}
 			return files unless dir
-			files << dir.outfiles[path[-1]] if dir.outfiles.include? path[-1]
-			files.concat dir.collections[path[-1]] if dir.collections.include? path[-1]
+			fn = path[-1]
+			files << (ffile ? FFile.new(dir.outfiles[fn], path, nil) : dir.outfiles[fn]) if dir.outfiles.include? fn
+			files.concat ffile ? dir.collections[fn].map{|f| FFile.new f, nil, nil} : dir.collections[fn] if dir.collections.include? fn
 			return files
 		end
 		dir = path.split('/').inject(self){|obj, dn| obj&.subdirs[dn]}
 		return files unless dir
 		if postpath
-			dir.subdirs.each {|name, obj| files.concat obj.find_outfiles_imp(postpath, nil, nil) if name.match? regex}
+			dir.subdirs.each do |name, obj|
+				next unless name.match? regex
+				finds = obj.find_outfiles_imp postpath.delete_prefix('/'), nil, nil, ffile:ffile
+				finds.each{|f| f.vname, f.stem = path + name + postpath, name[regex, 1] if f.vname}
+				files.concat finds
+			end
 		else
-			dir.outfiles.each {|k, v| files << v if k.match? regex}
-			dir.collections.each {|k, v| files.concat v if k.match? regex}
+			dir.outfiles.each {|k, v| files << (ffile ? FFile.new(v, path + k, k[regex, 1]) : v) if k.match? regex}
+			dir.collections.each do |k, v|
+				next unless k.match? regex
+				files.concat ffile ? v.map {|f| FFile.new f, nil, nil} : v
+			end
 		end
 		files
 	end
