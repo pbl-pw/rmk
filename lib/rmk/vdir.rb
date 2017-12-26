@@ -39,7 +39,7 @@ class Rmk::VDir
 
 	def vpath; @virtual_path end
 
-	def collections(name) @collections[name] ||= [] end
+	def collections(name = nil) name ? @collections[name] ||= [] : @collections end
 
 	def include_subdir(path)
 		@subdirs[path] ||= Rmk::VDir.new @rmk, self, path
@@ -60,7 +60,7 @@ class Rmk::VDir
 	# when pattern include '*', return [dir part, file(or dir) match regex, post dir part, post file part]
 	# ;otherwise return [origin pattern, nil, nil, nil]
 	def split_vpath_pattern(pattern)
-		match = /^((?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)(\/(?:[^\/*]+\/)*+[^\/*]++)?)$/.match pattern
+		match = /^((?:[^\/*]+\/)*+)([^\/*]*+)(?:\*([^\/*]*+))?(?(3)\/((?:[^\/*]+\/)*+[^\/*]++))?$/.match pattern
 		raise "file syntax '#{pattern}' error" unless match
 		dir, prefix, postfix, postpath = *match[1..4]
 		regex = postfix && /#{Regexp.escape prefix}(.*)#{Regexp.escape postfix}$/
@@ -97,28 +97,20 @@ class Rmk::VDir
 	protected def find_outfiles_imp(path, regex, postpath)
 		files = []
 		if regex
+			dir = path.split('/').inject(self){|obj, dn| obj&.subdirs[dn]}
+			return files unless dir
 			if postpath
-				@outfiles.each do |k, v|
-					files << v if k.start_with?(path) && k.end_with?(postpath) && k[path.size .. -postpath.size-1].match?(regex)
-				end
-				@collections.each do |k, v|
-					files.concat v if k.start_with?(path) && k.end_with?(postpath) && k[path.size .. -postpath.size-1].match?(regex)
-				end
+				dir.subdirs.each {|name, obj| files.concat obj.find_outfiles_imp(postpath, nil, nil) if name.match? regex}
 			else
-				@outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)}
-				@collections.each {|k, v| files.concat v if k.start_with?(path) && k[path.size..-1].match?(regex)}
+				dir.outfiles.each {|k, v| files << v if k.match? regex}
+				dir.collections.each {|k, v| files.concat v if k.match? regex}
 			end
 		else
-			files << @outfiles[path] if @outfiles.include? path
-			files.concat @collections[path] if @collections.include? path
-		end
-		if path.sub! /^([^\/]+)\//, ''
-			subdir = $1
-			return files unless @subdirs.include? subdir
-			files.concat @subdirs[subdir].find_outfiles_imp(path, regex, postpath)
-		elsif postpath
-			postpath.sub! /^\//, ''
-			@subdirs.each{|k, v| files.concat v.find_outfiles_imp(postpath, nil, nil) if k.match? regex}
+			path = path.split '/'
+			dir = path[0..-2].inject(self){|obj, dn| obj&.subdirs[dn]}
+			return files unless dir
+			files << dir.outfiles[path[-1]] if dir.outfiles.include? path[-1]
+			files.concat dir.collections[path[-1]] if dir.collections.include? path[-1]
 		end
 		files
 	end
