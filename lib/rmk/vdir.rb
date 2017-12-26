@@ -106,10 +106,9 @@ class Rmk::VDir
 	protected def find_outfiles_imp(path, regex, postpath, ffile:false)
 		files = []
 		unless regex
-			path = path.split '/'
-			dir = path[0..-2].inject(self){|obj, dn| obj&.subdirs[dn]}
+			*spath, fn = *path.split('/')
+			dir = spath.inject(self){|obj, dn| obj&.subdirs[dn]}
 			return files unless dir
-			fn = path[-1]
 			files << (ffile ? FFile.new(dir.outfiles[fn], path, nil) : dir.outfiles[fn]) if dir.outfiles.include? fn
 			files.concat ffile ? dir.collections[fn].map{|f| FFile.new f, nil, nil} : dir.collections[fn] if dir.collections.include? fn
 			return files
@@ -117,11 +116,13 @@ class Rmk::VDir
 		dir = path.split('/').inject(self){|obj, dn| obj&.subdirs[dn]}
 		return files unless dir
 		if postpath
+			*spath, fn = *postpath.delete_prefix('/').split('/')
 			dir.subdirs.each do |name, obj|
 				next unless name.match? regex
-				finds = obj.find_outfiles_imp postpath.delete_prefix('/'), nil, nil, ffile:ffile
-				finds.each{|f| f.vname, f.stem = path + name + postpath, name[regex, 1] if f.vname}
-				files.concat finds
+				sdir = spath.inject(obj){|sobj, dn| sobj&.subdirs[dn]}
+				next unless sdir
+				files << (ffile ? FFile.new(sdir.outfiles[fn], path + name + postpath, nil) : sdir.outfiles[fn]) if sdir.outfiles.include? fn
+				files.concat ffile ? sdir.collections[fn].map{|f| FFile.new f, nil, nil} : sdir.collections[fn] if sdir.collections.include? fn
 			end
 		else
 			dir.outfiles.each {|k, v| files << (ffile ? FFile.new(v, path + k, k[regex, 1]) : v) if k.match? regex}
