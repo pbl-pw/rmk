@@ -394,16 +394,13 @@ class Rmk::VDir
 				define_system_vars
 				@rules.merge! @parent.rules
 			end
-		when 'error'
+		when 'report'
 			state = begin_define_nonvar indent
-			$stderr.puts state[:vars].interpolate_str line
-			exit
-		when 'warn'
-			state = begin_define_nonvar indent
-			$stderr.puts state[:vars].interpolate_str line
-		when 'info'
-			state = begin_define_nonvar indent
-			puts state[:vars].interpolate_str line
+			parms = line.match /^((error)|warn|(info))\s+(.*)$/
+			raise 'syntax error' unless parms
+			line = "Rmk: #{parms[1]}: " + state[:vars].interpolate_str(parms[4])
+			parms[3] ? puts(line) : $stderr.puts(line)
+			exit 2 if parms[2]
 		else
 			match = /^(?:(?<append>\+=)|=)(?(<append>)|\s*)(?<value>.*)$/.match line
 			raise 'syntax error' unless match
