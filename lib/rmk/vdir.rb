@@ -5,7 +5,7 @@ require_relative 'build'
 
 class Rmk::VDir
 	attr_reader :rmk, :abs_src_path, :abs_out_path
-	attr_reader :srcfiles, :outfiles, :builds
+	attr_reader :srcfiles, :outfiles, :voutfiles, :builds
 	attr_reader :vars, :rules, :subdirs
 	attr_reader :defaultfile
 
@@ -21,7 +21,7 @@ class Rmk::VDir
 		@subdirs = {}
 		@srcfiles = {}
 		@outfiles = {}
-		@voutfiles = {}
+		@voutfiles = {''=>@outfiles}
 		@builds = []
 		@collections = {}
 		@virtual_path = @parent&.join_virtual_path("#{path}/")
@@ -112,7 +112,7 @@ class Rmk::VDir
 			*spath, fn = *path.split('/')
 			dir = spath.inject(self){|obj, dn| obj&.subdirs[dn]}
 			return files unless dir
-			files << (ffile ? FFile.new(dir.outfiles[fn], path) : dir.outfiles[fn]) if dir.outfiles.include? fn
+			dir.voutfiles.each_value{|ofs| files << (ffile ? FFile.new(ofs[fn], path) : ofs[fn]) if ofs.include? fn}
 			files.concat ffile ? dir.collections[fn].map{|f| FFile.new f} : dir.collections[fn] if dir.collections.include? fn
 			return files
 		end
@@ -124,11 +124,14 @@ class Rmk::VDir
 				next unless name.match? regex
 				sdir = spath.inject(obj){|sobj, dn| sobj&.subdirs[dn]}
 				next unless sdir
-				files << (ffile ? FFile.new(sdir.outfiles[fn], path + name + postpath, name[regex, 1]) : sdir.outfiles[fn]) if sdir.outfiles.include? fn
+				vname, stem = path + name + postpath, name[regex, 1] if ffile
+				sdir.voutfiles.each_value{|ofs| files << (ffile ? FFile.new(ofs[fn], vname, stem) : ofs[fn]) if ofs.include? fn}
 				files.concat ffile ? sdir.collections[fn].map{|f| FFile.new f} : sdir.collections[fn] if sdir.collections.include? fn
 			end
 		else
-			dir.outfiles.each {|k, v| files << (ffile ? FFile.new(v, path + k, k[regex, 1]) : v) if k.match? regex}
+			dir.voutfiles.each_value do |ofs|
+				ofs.each {|k, v| files << (ffile ? FFile.new(v, path + k, k[regex, 1]) : v) if k.match? regex}
+			end
 			dir.collections.each do |k, v|
 				next unless k.match? regex
 				files.concat ffile ? v.map {|f| FFile.new f} : v
