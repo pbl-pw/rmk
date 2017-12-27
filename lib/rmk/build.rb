@@ -17,7 +17,7 @@ class Rmk::Build
 	# @param output [String, nil] output raw string
 	# @param implicit_output [String, nil] implicit output raw string
 	# @param collection [String, nil] collection name
-	def initialize(dir, rule, vars, input, implicit_input, order_only_input, output, implicit_output, collection, stem:nil)
+	def initialize(dir, rule, vars, input, implicit_input, order_only_input, output, implicit_output, collection)
 		@mutex = Thread::Mutex.new
 		@updatedcnt = 0		# input file updated count
 		@runed = false			# build has been runed
@@ -29,31 +29,35 @@ class Rmk::Build
 		@vars = Rmk::Vars.new @vars_we	#
 		@infiles = input
 
+		if @infiles.size == 1
+			if FFile === @infiles[0]
+				vname = @infiles[0].vname
+				if vname
+					match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vname
+					@vars['in_dir'], @vars['in_nodir'] = match[1], match[2]
+					match = /^(.*)\.(.*)$/.match match[2]
+					@vars['in_base'], @vars['in_ext'] = match[1], match[2]
+					@vars['in_noext'] = @vars['in_dir'] + @vars['in_base']
+				end
+				@vars['stem'] = @infiles[0].stem if @infiles[0].stem
+				@infiles[0] = @infiles[0].vfile
+			end
+		end
 		@vars['in'] = @infiles.map do |file|
 			file.input_ref_builds << self
 			next file.vpath unless file.src?
 			file.vpath ? @dir.rmk.join_rto_src_path(file.vpath) : file.path
 		end.join ' '
-		if @infiles.size == 1 && @infiles[0].vpath
-			vname = @infiles[0].vpath
-			vname = vname[@dir.vpath.size .. -1] if @dir.vpath && vname.start_with?(@dir.vpath)
-			match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vname
-			@vars['in_dir'], @vars['in_nodir'] = match[1], match[2]
-			match = /^(.*)\.(.*)$/.match match[2]
-			@vars['in_base'], @vars['in_ext'] = match[1], match[2]
-			@vars['in_noext'] = @vars['in_dir'] + @vars['in_base']
-		end
-		@vars['stem'] = stem if stem
 
 		@vars.split_str(implicit_input).each do |fn|
-			files, _ = @dir.find_inputfiles fn
+			files = @dir.find_inputfiles fn
 			raise "pattern '#{fn}' not match any file" if files.empty?
 			files.each{|f| f.input_ref_builds << self}
 		end if implicit_input
 
 		@orderfiles = []
 		@vars.split_str(order_only_input).each do |fn|
-			files, _ = @dir.find_inputfiles fn
+			files = @dir.find_inputfiles fn
 			raise "pattern '#{fn}' not match any file" if files.empty?
 			files.each{|f| f.order_ref_builds << self}
 		end if order_only_input

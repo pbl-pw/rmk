@@ -78,12 +78,13 @@ class Rmk::VDir
 		dir, regex, postpath = split_vpath_pattern pattern
 		files = find_srcfiles_imp pattern, dir, regex, postpath, ffile:ffile
 		files.concat find_outfiles_imp  dir, regex, postpath, ffile:ffile
-		[files, regex]
+		files
 	end
 
 	# find srcfiles raw implement(assume all parms valid)
 	# @param pattern [String] virtual path, can include '*' to match any char at last no dir part
-	# @return [Array<Hash>]
+	# @param ffile [Boolean] return FFile struct or not
+	# @return [Array<VFile, FFile>] return array of FFile when ffile, otherwise array of VFile
 	protected def find_srcfiles_imp(pattern, dir, regex, postpath, ffile:false)
 		return Dir[join_virtual_path(pattern), base: @rmk.srcroot].map! do |vp|
 			@rmk.add_src_file path:@rmk.join_abs_src_path(vp), vpath:vp
@@ -91,7 +92,7 @@ class Rmk::VDir
 		return Dir[pattern, base:@abs_src_path].map! do |vn|
 			FFile.new @rmk.add_src_file(path:join_abs_src_path(vn), vpath:join_virtual_path(vn)), vn, nil
 		end unless regex
-		range = dir.size .. postpath ? -1 - postpath.size : -1
+		range = dir.size .. (postpath ? -1 - postpath.size : -1)
 		Dir[pattern, base:@abs_src_path].map! do |vn|
 			file = @rmk.add_src_file path:join_abs_src_path(vn), vpath:join_virtual_path(vn)
 			FFile.new file, vn, vn[range][regex, 1]
@@ -102,15 +103,16 @@ class Rmk::VDir
 	# @param path [String] virtual path, if regex, path must be dir(end with '/') or empty, otherwise contrary
 	# @param regex [Regexp, nil] if not nil, file match regexp, or dir match regexp when postpath not nil
 	# @param postpath [String, nil] path after dir match regexp
-	# @return [Array<VFile>]
+	# @param ffile [Boolean] return FFile struct or not
+	# @return [Array<VFile, FFile>] return array of FFile when ffile, otherwise array of VFile
 	protected def find_outfiles_imp(path, regex, postpath, ffile:false)
 		files = []
 		unless regex
 			*spath, fn = *path.split('/')
 			dir = spath.inject(self){|obj, dn| obj&.subdirs[dn]}
 			return files unless dir
-			files << (ffile ? FFile.new(dir.outfiles[fn], path, nil) : dir.outfiles[fn]) if dir.outfiles.include? fn
-			files.concat ffile ? dir.collections[fn].map{|f| FFile.new f, nil, nil} : dir.collections[fn] if dir.collections.include? fn
+			files << (ffile ? FFile.new(dir.outfiles[fn], path) : dir.outfiles[fn]) if dir.outfiles.include? fn
+			files.concat ffile ? dir.collections[fn].map{|f| FFile.new f} : dir.collections[fn] if dir.collections.include? fn
 			return files
 		end
 		dir = path.split('/').inject(self){|obj, dn| obj&.subdirs[dn]}
@@ -121,14 +123,14 @@ class Rmk::VDir
 				next unless name.match? regex
 				sdir = spath.inject(obj){|sobj, dn| sobj&.subdirs[dn]}
 				next unless sdir
-				files << (ffile ? FFile.new(sdir.outfiles[fn], path + name + postpath, nil) : sdir.outfiles[fn]) if sdir.outfiles.include? fn
-				files.concat ffile ? sdir.collections[fn].map{|f| FFile.new f, nil, nil} : sdir.collections[fn] if sdir.collections.include? fn
+				files << (ffile ? FFile.new(sdir.outfiles[fn], path + name + postpath) : sdir.outfiles[fn]) if sdir.outfiles.include? fn
+				files.concat ffile ? sdir.collections[fn].map{|f| FFile.new f} : sdir.collections[fn] if sdir.collections.include? fn
 			end
 		else
 			dir.outfiles.each {|k, v| files << (ffile ? FFile.new(v, path + k, k[regex, 1]) : v) if k.match? regex}
 			dir.collections.each do |k, v|
 				next unless k.match? regex
-				files.concat ffile ? v.map {|f| FFile.new f, nil, nil} : v
+				files.concat ffile ? v.map {|f| FFile.new f} : v
 			end
 		end
 		files
@@ -318,18 +320,17 @@ class Rmk::VDir
 			if eachmode
 				vars = Rmk::MultiVarWriter.new
 				iparms[0].each do |fn|
-					files, regex = find_inputfiles fn
+					files = find_inputfiles fn, ffile:true
 					files.each do |file|
-						stem = regex && File.basename(file.vpath&.[](@virtual_path.size .. -1) || file.path)[regex, 1]
 						build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], [file], iparms[1],
-							iparms[2], oparms[0], oparms[1], parms[2], stem:stem)
+							iparms[2], oparms[0], oparms[1], parms[2])
 						@builds << build
 						vars << build.vars
 					end
 				end
 			else
 				files = []
-				iparms[0].each {|fn| files.concat find_inputfiles(fn)[0]}
+				iparms[0].each {|fn| files.concat find_inputfiles fn}
 				build = Rmk::Build.new(self, @rules[match[:rule]], state[:vars], files, iparms[1], iparms[2],
 					oparms[0], oparms[1], parms[2])
 				@builds << build
@@ -343,7 +344,7 @@ class Rmk::VDir
 			collection = state[:vars].split_str(parms[1].lstrip).map!{|name| collections name}
 			raise 'must give collection name' if collection.empty?
 			state[:vars].split_str(parms[0]).each do |fn|
-				files, _ = find_inputfiles fn
+				files = find_inputfiles fn
 				collection.each{|col| col.concat files}
 			end
 		when 'default'

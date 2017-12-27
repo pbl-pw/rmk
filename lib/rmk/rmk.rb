@@ -59,28 +59,30 @@ class Rmk
 	def find_inputfiles(pattern, ffile:false)
 		pattern = Rmk.normalize_path pattern
 		path, regex, postpath = split_path_pattern pattern
+		files = []
 		if regex
-			files = []
 			@files_mutex.synchronize do
-				find_outfiles_imp files, path, regex, postpath
+				find_outfiles_imp files, path, regex, postpath, ffile:ffile
+				range = postpath ? path.size..-1-postpath.size : path.size..-1
 				Dir[pattern].each do |fn|
 					next if @outfiles.include? fn
-					next files << @srcfiles[fn] if @srcfiles.include? fn
-					files << (@srcfiles[fn] = VFile.new rmk:self, path:fn, is_src:true,
+					next files << (ffile ? FFile.new(@srcfiles[fn], nil, fn[range][regex, 1]) : @srcfiles[fn]) if @srcfiles.include? fn
+					file = (@srcfiles[fn] = VFile.new rmk:self, path:fn, is_src:true,
 						vpath:fn.start_with?(@srcroot) && fn[@srcroot.size .. -1])
+					files << (ffile ? FFile.new(file, nil, fn[range][regex, 1]) : file)
 				end
 			end
-			[files, regex]
 		else
-			file = @files_mutex.synchronize do
-				next @outfiles[path] if @outfiles.include? path
-				next @srcfiles[path] if @srcfiles.include? path
+			files << @files_mutex.synchronize do
+				next ffile ? FFile.new(@outfiles[path]) : @outfiles[path] if @outfiles.include? path
+				next ffile ? FFile.new(@srcfiles[path]) : @srcfiles[path] if @srcfiles.include? path
 				next unless File.exist? path
-				@srcfiles[path] = VFile.new rmk:self, path:path, is_src:true,
+				file = @srcfiles[path] = VFile.new rmk:self, path:path, is_src:true,
 						vpath:path.start_with?(@srcroot) && path[@srcroot.size .. -1]
+				ffile ? FFile.new(file) : file
 			end
-			[file ? [file] : [], nil]
 		end
+		files
 	end
 
 	# find files which must be build's output
@@ -101,10 +103,17 @@ class Rmk
 	# @param path [String] absolute path, path must be dir(end with '/') or empty
 	# @param regex [Regexp] file match regexp, or dir match regexp when postpath not nil
 	# @param postpath [String, nil] path after dir match regexp
-	private def find_outfiles_imp(files, path, regex, postpath)
-		return @outfiles.each {|k, v| files << v if k.start_with?(path) && k[path.size..-1].match?(regex)} unless postpath
+	# @param ffile [Boolean] return FFile struct or not
+	# @return [Array<VFile, FFile>] return array of FFile when ffile, otherwise array of VFile
+	private def find_outfiles_imp(files, path, regex, postpath, ffile:false)
+		range = postpath ? path.size..-1-postpath.size : path.size..-1
+		return @outfiles.each do |k, v|
+			next unless k.start_with?(path) && k[range].match?(regex)
+			files << (ffile ? FFile.new(v, nil, k[range][regex, 1]) : v)
+		end unless postpath
 		@outfiles.each do |k, v|
-			files << v if k.start_with?(path) && k.end_with?(postpath) && k[path.size..-1-postpath.size].match?(regex)
+			next unless k.start_with?(path) && k.end_with?(postpath) && k[range].match?(regex)
+			files << (ffile ? FFile.new(v, nil, k[range][regex, 1]) : v)
 		end
 	end
 
@@ -142,7 +151,7 @@ class Rmk
 			next warn "Rmk: warn: outfile '#{path}' not found when restore depfile" unless @outfiles.include? path
 			build = @outfiles[path].output_ref_build
 			fns.each do |fn|
-				files, _ = @virtual_root.find_inputfiles fn
+				files = @virtual_root.find_inputfiles fn
 				files.each{|file| file.input_ref_builds << build; build.infiles << file}
 			end
 		end
