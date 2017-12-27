@@ -21,6 +21,7 @@ class Rmk::VDir
 		@subdirs = {}
 		@srcfiles = {}
 		@outfiles = {}
+		@voutfiles = {}
 		@builds = []
 		@collections = {}
 		@virtual_path = @parent&.join_virtual_path("#{path}/")
@@ -386,6 +387,19 @@ class Rmk::VDir
 				end
 			end
 			threads.each{|thr| thr.join}
+		when 'vout'
+			state = begin_define_nonvar indent
+			match = line.match /^(\S+)\s*(?:=\s*(.*))?$/
+			raise 'syntax error' unless match
+			if match[2]
+				path = state[:vars].interpolate_str match[2]
+				path = join_virtual_path path unless path.match? /^[a-z]:\//i
+				Dir.mkdir path unless Dir.exist? path
+				@voutfiles[match[1]] = {path:path}
+			elsif @parent
+			else
+				raise 'no inheritable vout dir'
+			end
 		when 'inherit'
 			begin_define_nonvar indent
 			raise 'syntax error' if line
