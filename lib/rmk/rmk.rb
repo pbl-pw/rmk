@@ -145,6 +145,7 @@ class Rmk
 	# parse project
 	# @return [self]
 	def parse
+		puts 'Rmk: parse start'
 		@virtual_root.parse
 		@dep_storage.wait_ready
 		@dep_storage.data!.each do |path, fns|
@@ -155,10 +156,12 @@ class Rmk
 				files.each{|file| file.input_ref_builds << build; build.infiles << file}
 			end
 		end
+		puts 'Rmk: parse done'
 		self
 	end
 
 	def build(*tgts)
+		puts 'Rmk: build start'
 		@mid_storage.wait_ready
 		if tgts.empty?
 			files = @defaultfiles
@@ -171,7 +174,6 @@ class Rmk
 				file
 			end
 		end
-		puts 'Rmk: build start'
 		@src_list_storage.wait_ready
 		@src_list_storage.data!.each do |src, outs|
 			next if @srcfiles.include? src

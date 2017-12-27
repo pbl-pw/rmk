@@ -114,7 +114,7 @@ class Rmk::Build
 			env['PATH'] = @vars['PATH_prepend'] + ENV['PATH'] if @vars['PATH_prepend']
 			@vars['ENV_export'].split(/\s+/).each{|name| env[name] = @vars[name] if @vars.include? name} if @vars['ENV_export']
 			std, err, result = env.empty? ? Open3.capture3(cmd) : Open3.capture3(env, cmd)
-			std = std.empty? ? @vars['echo'] || cmd : (@vars['echo'] || cmd) + ?\n + std
+			std = std.empty? ? @vars['echo'] || "Rmk: run: #{cmd}" : (@vars['echo'] || "Rmk: run: #{cmd}") + ?\n + std
 			if result.exitstatus != 0
 				err = "execute faild: '#{cmd}'" if err.empty?
 				Rmk::Build.log_cmd_out std, err
