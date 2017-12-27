@@ -123,7 +123,7 @@ class Rmk::VDir
 				next unless name.match? regex
 				sdir = spath.inject(obj){|sobj, dn| sobj&.subdirs[dn]}
 				next unless sdir
-				files << (ffile ? FFile.new(sdir.outfiles[fn], path + name + postpath) : sdir.outfiles[fn]) if sdir.outfiles.include? fn
+				files << (ffile ? FFile.new(sdir.outfiles[fn], path + name + postpath, name[regex, 1]) : sdir.outfiles[fn]) if sdir.outfiles.include? fn
 				files.concat ffile ? sdir.collections[fn].map{|f| FFile.new f} : sdir.collections[fn] if sdir.collections.include? fn
 			end
 		else
