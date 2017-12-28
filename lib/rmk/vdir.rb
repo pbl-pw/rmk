@@ -18,6 +18,10 @@ class Rmk::VOutDir < Hash
 	def join_abs_path(path) File.join @path, path end
 
 	def join_virtual_path(path) @vpath && File.join(@vpath, path) end
+
+	def new_filepath(name)
+		{path:File.join(@path, name), vpath:@vpath && (@vpath.empty? ? name : File.join(@vpath, name))}
+	end
 end
 
 class Rmk::VDir
@@ -172,8 +176,12 @@ class Rmk::VDir
 	def add_out_file(name)
 		if /^[A-Z]:/.match? name
 			@rmk.add_out_file path:name, vpath: name.start_with?(@rmk.outroot) && name[@rmk.outroot.size .. - 1]
+		elsif /^:(.*)\/([^\/]+)$/.match name
+			vout, name = $1, $2
+			raise "vout dir '#{vout}' not found" unless @voutfiles.include? vout
+			@voutfiles[vout][name] = @rmk.add_out_file **@voutfiles[vout].new_filepath(name)
 		else
-			@outfiles[name] = @rmk.add_out_file path:join_abs_out_path(name), vpath:join_virtual_path(name)
+			@voutfiles[''][name] = @rmk.add_out_file path:join_abs_out_path(name), vpath:join_virtual_path(name)
 		end
 	end
 
@@ -414,11 +422,15 @@ class Rmk::VDir
 			raise 'syntax error' unless match
 			if match[2]
 				path = state[:vars].interpolate_str match[2]
-				path = join_virtual_path path unless path.match? /^[a-z]:\//i
-				Dir.mkdir path unless Dir.exist? path
 				path << '/' unless path.end_with? '/'
-				@voutfiles[match[1]] = Rmk::VOutDir.new path:path,
-					vpath:path.start_with?(@rmk.outroot) && path[@rmk.outroot.size..-1]
+				if path.match? /^[a-z]:\//i
+					@voutfiles[match[1]] = Rmk::VOutDir.new path:path,
+						vpath:path.start_with?(@rmk.outroot) && path[@rmk.outroot.size..-1]
+				else
+					path = join_virtual_path path
+					@voutfiles[match[1]] = Rmk::VOutDir.new path:join_abs_out_path(path), vpath:path
+				end
+				Dir.mkdir path unless Dir.exist? path
 			elsif @parent&.voutfiles&.include? match[1]
 				path = (@voutfiles[match[1]] = @parent.voutfiles[match[1]].derive_new @name).path
 				Dir.mkdir path unless Dir.exist? path
