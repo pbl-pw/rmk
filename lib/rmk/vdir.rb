@@ -99,6 +99,7 @@ class Rmk::VDir
 		return @rmk.find_inputfiles pattern, ffile:ffile if pattern.match? /^[A-Z]:/
 		pattern = Rmk.normalize_path pattern
 		dir, regex, postpath = split_vpath_pattern pattern
+		return find_voutfiles_imp dir, regex, postpath, ffile:ffile if pattern.start_with? ':'
 		files = find_srcfiles_imp pattern, dir, regex, postpath, ffile:ffile
 		files.concat find_outfiles_imp  dir, regex, postpath, ffile:ffile
 		files
@@ -162,11 +163,42 @@ class Rmk::VDir
 		files
 	end
 
+	# find voutfiles
+	protected def find_voutfiles_imp(path, regex, postpath, ffile:false)
+		files = []
+		path.delete_prefix! ':'
+		unless regex
+			match = path.match /^(.*)\/([^\/]+)$/
+			vout, name = match[1], match[2]
+			raise "vout dir '#{vout}' not found" unless @voutfiles.include? vout
+			vout = @voutfiles[vout]
+			return files unless vout.include? name
+			files << (ffile ? FFile.new(vout[name], name) : vout[name])
+			return files
+		end
+		if postpath
+			match = postpath.match /^(.*)\/([^\/]+)$/
+			postpath, name = match[1], match[2]
+			range = path.size .. -1-postpath.size
+			@voutfiles.each do |vn, fs|
+				next unless vn.start_with?(path) && vn.end_with?(postpath) && vn[range].match?(regex) && fs.include?(name)
+				files << (ffile ? FFile.new(fs[name], name, vn[range][regex, 1]) : fs[name])
+			end
+		else
+			vout = path.delete_suffix '/'
+			raise "vout dir '#{vout}' not found" unless @voutfiles.include? vout
+			vout = @voutfiles[vout]
+			vout.each {|name, file| files << (ffile ? FFile.new(file, name, name[regex, 1]) : file) if name.match? regex}
+		end
+		files
+	end
+
 	# find files which must be build's output
 	# @param pattern [String] virtual path to find out files which can include '*' to match any char at last no dir part
 	# @return [Array<Hash>] return Array of file, and Regex when has '*' pattern
 	def find_outfiles(pattern)
 		return @rmk.find_outfiles pattern if pattern.match? /^[A-Z]:/i
+		return find_voutfiles_imp *split_vpath_pattern(pattern) if pattern.start_with? ':'
 		find_outfiles_imp *split_vpath_pattern(pattern)
 	end
 
