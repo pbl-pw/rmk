@@ -3,6 +3,23 @@ require_relative 'vfile'
 require_relative 'rule'
 require_relative 'build'
 
+class Rmk::VOutDir < Hash
+	attr_reader :path, :vpath
+
+	def initialize(path:, vpath:nil)
+		super()
+		@path, @vpath = path, vpath
+	end
+
+	def derive_new(subname)
+		Rmk::VOutDir.new path:File.join(@path, subname, ''), vpath:@vpath && File.join(@vpath, subname, '')
+	end
+
+	def join_abs_path(path) File.join @path, path end
+
+	def join_virtual_path(path) @vpath && File.join(@vpath, path) end
+end
+
 class Rmk::VDir
 	attr_reader :rmk, :abs_src_path, :abs_out_path
 	attr_reader :srcfiles, :outfiles, :voutfiles, :builds
@@ -16,18 +33,19 @@ class Rmk::VDir
 	def initialize(rmk, parent, path = '')
 		@rmk = rmk
 		@parent = parent
+		@name = path
 		@defaultfile = @parent&.defaultfile
 		@rules = {}
 		@subdirs = {}
 		@srcfiles = {}
-		@outfiles = {}
-		@voutfiles = {''=>@outfiles}
 		@builds = []
 		@collections = {}
-		@virtual_path = @parent&.join_virtual_path("#{path}/")
+		@virtual_path = @parent&.join_virtual_path("#{@name}/")
 		Dir.mkdir @virtual_path if @virtual_path && !Dir.exist?(@virtual_path)
 		@abs_src_path = ::File.join @rmk.srcroot, @virtual_path.to_s, ''
 		@abs_out_path = ::File.join @rmk.outroot, @virtual_path.to_s, ''
+		@outfiles = Rmk::VOutDir.new path:@abs_out_path, vpath:@virtual_path || ''
+		@voutfiles = {''=>@outfiles}
 		@vars = Rmk::Vars.new @rmk.vars
 		define_system_vars
 	end
@@ -392,14 +410,18 @@ class Rmk::VDir
 			threads.each{|thr| thr.join}
 		when 'vout'
 			state = begin_define_nonvar indent
-			match = line.match /^(\S+)\s*(?:=\s*(.*))?$/
+			match = line.match /^(\S+)\s*(?:=\s*(\S*)\s*)?$/
 			raise 'syntax error' unless match
 			if match[2]
 				path = state[:vars].interpolate_str match[2]
 				path = join_virtual_path path unless path.match? /^[a-z]:\//i
 				Dir.mkdir path unless Dir.exist? path
-				@voutfiles[match[1]] = {path:path}
-			elsif @parent
+				path << '/' unless path.end_with? '/'
+				@voutfiles[match[1]] = Rmk::VOutDir.new path:path,
+					vpath:path.start_with?(@rmk.outroot) && path[@rmk.outroot.size..-1]
+			elsif @parent&.voutfiles&.include? match[1]
+				path = (@voutfiles[match[1]] = @parent.voutfiles[match[1]].derive_new @name).path
+				Dir.mkdir path unless Dir.exist? path
 			else
 				raise 'no inheritable vout dir'
 			end
