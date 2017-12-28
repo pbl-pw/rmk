@@ -133,13 +133,13 @@ class Rmk::VDir
 		files = []
 		unless regex
 			*spath, fn = *path.split('/')
-			dir = spath.inject(self){|obj, dn| obj&.subdirs[dn]}
+			dir = spath.inject(self){|obj, dn| obj&.subdirs&.[](dn)}
 			return files unless dir
 			dir.voutfiles.each_value{|ofs| files << (ffile ? FFile.new(ofs[fn], path) : ofs[fn]) if ofs.include? fn}
 			files.concat ffile ? dir.collections[fn].map{|f| FFile.new f} : dir.collections[fn] if dir.collections.include? fn
 			return files
 		end
-		dir = path.split('/').inject(self){|obj, dn| obj&.subdirs[dn]}
+		dir = path.split('/').inject(self){|obj, dn| obj&.subdirs&.[](dn)}
 		return files unless dir
 		if postpath
 			*spath, fn = *postpath.delete_prefix('/').split('/')
@@ -418,36 +418,42 @@ class Rmk::VDir
 				raise "pattern '#{parm}' not match any out file" if files.empty?
 				@rmk.add_default *files
 			end
-		when 'include'
+		when /^include(_dir)?(_force)?$/
+			dirmode, force = Regexp.last_match(1), Regexp.last_match(2)
 			state = begin_define_nonvar indent
 			parms = state[:vars].split_str line
-			raise "#{lid}: must have file name" if parms.empty?
-			parms.each do |parm|
-				if parm.match? /^[a-zA-Z]:/
-					raise "file '#{parm}' not exist" unless ::File.exist? parm
-					parse_file parm
-				else
-					file = join_abs_out_path parm
-					next parse_file file if ::File.exist? file
-					file = join_abs_src_path parm
-					next parse_file file if ::File.exist? file
-					raise "file '#{parm}' not exist"
+			raise dirmode ? "must have file name" : "must have dir name or matcher" if parms.empty?
+			if dirmode
+				threads = []
+				parms.each do |parm|
+					dirs = Dir[File.join @abs_src_path, parm, '']
+					if dirs.empty?
+						raise "subdir '#{parm}' doesn't exist" if force
+					else
+						dirs.each do |dir|
+							dir = include_subdir dir[@abs_src_path.size .. -2]
+							threads << Rmk::Schedule.new_thread!( &dir.method(:parse) )
+						end
+					end
+				end
+				threads.each{|thr| thr.join}
+			else
+				parms.each do |parm|
+					if parm.match? /^[a-zA-Z]:/
+						if File.exist? parm
+							parse_file parm
+						else
+							raise "file '#{parm}' not exist" if force
+						end
+					else
+						file = join_abs_out_path parm
+						next parse_file file if ::File.exist? file
+						file = join_abs_src_path parm
+						next parse_file file if ::File.exist? file
+						raise "file '#{parm}' not exist" if force
+					end
 				end
 			end
-		when 'incdir'
-			state = begin_define_nonvar indent
-			parms = state[:vars].split_str line
-			raise "#{lid}; must have dir name or matcher" if parms.empty?
-			threads = []
-			parms.each do |parm|
-				dirs = ::Dir[::File.join @abs_src_path, parm, '']
-				raise "subdir '#{parm}' doesn't exist" if dirs.empty? && !parm.match?(/(?<!\$)(?:\$\$)*\K\*/)
-				dirs.each do |dir|
-					dir = include_subdir dir[@abs_src_path.size .. -2]
-					threads << Rmk::Schedule.new_thread!( &dir.method(:parse) )
-				end
-			end
-			threads.each{|thr| thr.join}
 		when 'vout'
 			state = begin_define_nonvar indent
 			match = line.match /^(\S+)\s*(?:=\s*(\S*)\s*)?$/
