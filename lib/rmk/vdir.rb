@@ -431,9 +431,11 @@ class Rmk::VDir
 					@voutfiles[match[1]] = Rmk::VOutDir.new path:join_abs_out_path(path), vpath:path
 				end
 				Dir.mkdir path unless Dir.exist? path
+				@vars[match[1] + '_path'] = @voutfiles[match[1]].path[0 .. -2]
 			elsif @parent&.voutfiles&.include? match[1]
 				path = (@voutfiles[match[1]] = @parent.voutfiles[match[1]].derive_new @name).path
 				Dir.mkdir path unless Dir.exist? path
+				@vars[match[1] + '_path'] = @voutfiles[match[1]].path[0 .. -2]
 			else
 				raise 'no inheritable vout dir'
 			end
