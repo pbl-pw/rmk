@@ -202,10 +202,7 @@ class Rmk
 			exit puts('found nothing to build') || 0 if checklist.empty?
 			checklist.each {|file| file.check_for_build}
 		end
-		while Thread.list.size > 1
-			thr = Thread.list[-1]
-			thr.join unless thr == Thread.current
-		end
+		Rmk::Schedule.wait_all
 		puts 'Rmk: build end'
 		@mid_storage.data!.each_key {|key| @mid_storage.data!.delete key unless @src_list_storage.data!.include? key}
 		@mid_storage.save
