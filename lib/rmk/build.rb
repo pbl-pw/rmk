@@ -4,7 +4,7 @@ require_relative 'vfile'
 require 'open3'
 
 class Rmk::Build
-	attr_reader :dir
+	attr_reader :dir, :vars
 	attr_reader :infiles, :orderfiles, :outfiles
 
 	# create Build
@@ -24,9 +24,9 @@ class Rmk::Build
 		@input_modified = false	# input file has modified
 
 		@dir = dir
-		@rule = rule
-		@vars_we = Rmk::Vars.new vars		# outside writeable vars
-		@vars = Rmk::Vars.new @vars_we	#
+		@command = rule.command
+		@vars = vars.downstream_new clone_rmk:true
+		rmk_vars = @vars.rmk
 		@infiles = input
 
 		if @infiles.size == 1
@@ -34,16 +34,16 @@ class Rmk::Build
 				vname = @infiles[0].vname
 				if vname
 					match = /^((?:[^\/]+\/)*)([^\/]*)$/.match vname
-					@vars['in_dir'], @vars['in_nodir'] = match[1], match[2]
+					rmk_vars['in_dir'], rmk_vars['in_nodir'] = match[1], match[2]
 					match = /^(.*)\.(.*)$/.match match[2]
-					@vars['in_base'], @vars['in_ext'] = match[1], match[2]
-					@vars['in_noext'] = @vars['in_dir'] + @vars['in_base']
+					rmk_vars['in_base'], rmk_vars['in_ext'] = match[1], match[2]
+					rmk_vars['in_noext'] = rmk_vars['in_dir'] + rmk_vars['in_base']
 				end
-				@vars['stem'] = @infiles[0].stem if @infiles[0].stem
+				rmk_vars['stem'] = @infiles[0].stem if @infiles[0].stem
 				@infiles[0] = @infiles[0].vfile
 			end
 		end
-		@vars['in'] = @infiles.map do |file|
+		rmk_vars['in'] = @infiles.map do |file|
 			file.input_ref_builds << self
 			next file.vpath || file.path unless file.src?
 			file.vpath ? @dir.rmk.join_rto_src_path(file.vpath) : file.path
@@ -68,17 +68,15 @@ class Rmk::Build
 			file.output_ref_build = self
 			@outfiles << file
 		end
-		output = @rule['out'] || raise('must have output') unless output
+		output = rule['out'] || raise('must have output') unless output
 		@vars.split_str(output).each &regout
 		collection.each{|col| col.concat @outfiles} if collection
-		@vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
-		@vars['out_noext'] = @vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
-		@rule.vars.each {|name, str| @vars_we[name] = @vars.interpolate_str str}	# interpolate rule's vars to self
+		rmk_vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
+		rmk_vars['out_noext'] = rmk_vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
+		rule.vars.each {|name, str| @vars[name] = str}	# interpolate rule's vars to self
 		@vars.split_str(implicit_output).each &regout if implicit_output
-		@vars.freeze
+		rmk_vars.freeze
 	end
-
-	def vars; @vars.upstream_writer end
 
 	def input_updated!(modified, order:false)
 		Rmk::Schedule.new_thread! &method(:run) if @mutex.synchronize do
@@ -108,7 +106,7 @@ class Rmk::Build
 		modifieds = @outfiles.map{|file| File.exist?(file.path) ? true : (exec = :create)}
 		return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
 		@vars['depfile'] ||= (@outfiles[0].vpath || @outfiles[0].path) + '.dep' if @vars['deptype']
-		cmd = @vars.interpolate_str @vars['command'] || @rule.command
+		cmd = @vars.interpolate_str @vars['command'] || @command
 		unless /^\s*$/.match? cmd
 			env = {}
 			env['PATH'] = @vars['PATH_prepend'] + ENV['PATH'] if @vars['PATH_prepend']

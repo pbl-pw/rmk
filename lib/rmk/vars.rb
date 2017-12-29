@@ -4,12 +4,12 @@ class Rmk::Vars < Hash
 	# create vars
 	# @param rmk [Hash] rmk system reserved vars, query first so will not be override
 	# @param upstream [Rmk::Vars, nil] upstream vars for lookup var which current obj not include
-	def initialize(rmk, upstream, dup_rmk:false) @rmk, @upstream = rmk, upstream end
+	def initialize(rmk, upstream) @rmk, @upstream = rmk, upstream end
 	attr_reader :rmk, :upstream
 
 	# create new downstream vars which will lookup first, when not found then lookup current obj
-	# @param dup_rmk [Boolean] dup a new rmk Hash or not, usually dup when need add reserved vars
-	def downstream_new(dup_rmk:false) Rmk::Vars.new @rmk, self, dup_rmk:dup_rmk end
+	# @param clone_rmk [Boolean] dup a new rmk Hash or not, usually dup when need add reserved vars
+	def downstream_new(clone_rmk:false) Rmk::Vars.new clone_rmk ? @rmk.clone(freeze:false) : @rmk, self end
 
 	protected def fetch(name) super(name, nil) || @upstream&.fetch(name) end
 
@@ -51,19 +51,6 @@ class Rmk::Vars < Hash
 		end
 		result
 	end
-
-	class UpstreamWriter
-		def initialize(upstream, vars) @upstream, @vars = upstream, vars end
-
-		def [](name) @vars[name] end
-
-		def []=(name, append = false, value)
-			value = @vars.interpolate_str value.to_s
-			@upstream.store name, append ? self[name].to_s + value : value
-		end
-	end
-
-	def upstream_writer; UpstreamWriter.new @upstream, self end
 end
 
 class Rmk::MultiVarWriter

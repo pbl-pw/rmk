@@ -50,7 +50,7 @@ class Rmk::VDir
 		@abs_out_path = ::File.join @rmk.outroot, @virtual_path.to_s, ''
 		@outfiles = Rmk::VOutDir.new path:@abs_out_path, vpath:@virtual_path || ''
 		@voutfiles = {''=>@outfiles}
-		@vars = Rmk::Vars.new @rmk.vars.dup, nil
+		@vars = Rmk::Vars.new @rmk.vars.clone(freeze:false), nil
 		@vars.rmk['vpath'] = @virtual_path&.[](0 .. -2) || '.'
 		@vars.rmk['srcpath'] = @abs_src_path[0 .. -2]
 		@vars.rmk['outpath'] = @abs_out_path[0 .. -2]
