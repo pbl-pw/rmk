@@ -29,7 +29,7 @@ class Rmk
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
-		@vars = {'srcroot'=>@srcroot[0..-2], 'outroot'=>@outroot[0..-2], 'src_rto_root'=>(@src_relative || @srcroot)[0..-2]}
+		@vars = {'srcroot'=>@srcroot[0..-2], 'outroot'=>@outroot[0..-2], 'src_rto_root'=>(@src_relative || @srcroot)[0..-2]}.freeze
 		@virtual_root = Rmk::VDir.new self, nil
 	end
 	attr_reader :srcroot, :outroot, :vars, :virtual_root, :srcfiles, :outfiles

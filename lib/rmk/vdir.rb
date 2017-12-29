@@ -50,14 +50,10 @@ class Rmk::VDir
 		@abs_out_path = ::File.join @rmk.outroot, @virtual_path.to_s, ''
 		@outfiles = Rmk::VOutDir.new path:@abs_out_path, vpath:@virtual_path || ''
 		@voutfiles = {''=>@outfiles}
-		@vars = Rmk::Vars.new @rmk.vars
-		define_system_vars
-	end
-
-	private def define_system_vars
-		@vars['vpath'] = @virtual_path&.[](0 .. -2) || '.'
-		@vars['srcpath'] = @abs_src_path[0 .. -2]
-		@vars['outpath'] = @abs_out_path[0 .. -2]
+		@vars = Rmk::Vars.new @rmk.vars.dup, nil
+		@vars.rmk['vpath'] = @virtual_path&.[](0 .. -2) || '.'
+		@vars.rmk['srcpath'] = @abs_src_path[0 .. -2]
+		@vars.rmk['outpath'] = @abs_out_path[0 .. -2]
 	end
 
 	def vpath; @virtual_path end
@@ -469,11 +465,11 @@ class Rmk::VDir
 					@voutfiles[match[1]] = Rmk::VOutDir.new path:join_abs_out_path(path), vpath:path
 				end
 				Dir.mkdir path unless Dir.exist? path
-				@vars[match[1] + '_path'] = @voutfiles[match[1]].path[0 .. -2]
+				@vars.rmk[match[1] + '_path'] = @voutfiles[match[1]].path[0 .. -2]
 			elsif @parent&.voutfiles&.include? match[1]
 				path = (@voutfiles[match[1]] = @parent.voutfiles[match[1]].derive_new @name).path
 				Dir.mkdir path unless Dir.exist? path
-				@vars[match[1] + '_path'] = @voutfiles[match[1]].path[0 .. -2]
+				@vars.rmk[match[1] + '_path'] = @voutfiles[match[1]].path[0 .. -2]
 			else
 				raise 'no inheritable vout dir'
 			end
@@ -482,7 +478,6 @@ class Rmk::VDir
 			raise 'syntax error' if line
 			if @parent
 				@vars.merge! @parent.vars
-				define_system_vars
 				@rules.merge! @parent.rules
 			end
 		when 'report'

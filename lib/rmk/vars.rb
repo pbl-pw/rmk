@@ -2,20 +2,33 @@ class Rmk; end
 
 class Rmk::Vars < Hash
 	# create vars
+	# @param rmk [Hash] rmk system reserved vars, query first so will not be override
 	# @param upstream [Rmk::Vars, nil] upstream vars for lookup var which current obj not include
-	def initialize(upstream) @upstream = upstream end
-	attr_reader :upstream
+	def initialize(rmk, upstream, dup_rmk:false) @rmk, @upstream = rmk, upstream end
+	attr_reader :rmk, :upstream
 
-	def [](name)  super(name) || @upstream&.[](name) end
+	# create new downstream vars which will lookup first, when not found then lookup current obj
+	# @param dup_rmk [Boolean] dup a new rmk Hash or not, usually dup when need add reserved vars
+	def downstream_new(dup_rmk:false) Rmk::Vars.new @rmk, self, dup_rmk:dup_rmk end
+
+	protected def fetch(name) super(name, nil) || @upstream&.fetch(name) end
+
+	def [](name) @rmk[name] ||  fetch(name) end
 
 	def []=(name, append = false, value)
 		value = interpolate_str value.to_s
 		super name, append ? self[name].to_s + value : value
 	end
 
-	def include?(name, inherit = true) super(name) || inherit && @upstream&.include?(name) end
+	protected def member?(name) super(name) || @upstream&.member?(name) end
 
-	def keys(inherit = true) inherit && @upstream ? super() + @upstream.keys : super() end
+	def include?(name, inherit = true) inherit ? @rmk.include?(name) || member?(name) : super(name) end
+
+	alias_method :org_keys, :keys
+
+	protected def get_keys; @upstream ? org_keys + @upstream.get_keys : org_keys end
+
+	def keys(inherit = true) inherit ? @rmk.keys + get_keys : super() end
 
 	# only do #{\w+} interpolate
 	def preprocess_str(str) str.gsub(/\$((?:\$\$)*){(\w+)}/){"#{$1}#{self[$2]}"} end
