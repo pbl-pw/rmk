@@ -61,6 +61,7 @@ class Rmk::Build
 			raise "pattern '#{fn}' not match any file" if files.empty?
 			files.each{|f| f.order_ref_builds << self}
 		end if order_only_input
+		raise 'no found any input file' if @infiles.empty? && @orderfiles.empty?
 
 		@outfiles = []
 		regout = proc do |fn|
