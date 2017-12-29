@@ -346,7 +346,7 @@ class Rmk::VDir
 			raise 'rule name or command invalid' unless match
 			state = begin_define_nonvar indent
 			raise "rule '#{match[:name]}' has been defined" if @rules.include? match[:name]
-			rule = @rules[match[:name]] = Rmk::Rule.new state[:vars], command:match[:command]
+			rule = @rules[match[:name]] = Rmk::Rule.new match[:command]
 			@state << {indent:indent, type: :AcceptVar, condition:state[:condition], vars:rule.vars}
 		when /^exec$/
 			state = begin_define_nonvar indent

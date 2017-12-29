@@ -214,6 +214,5 @@ class Rmk
 		@src_list_storage.save
 	end
 
-	class Rule < Vars; end
 	class VFile; end
 end

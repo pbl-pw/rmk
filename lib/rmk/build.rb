@@ -73,7 +73,7 @@ class Rmk::Build
 		collection.each{|col| col.concat @outfiles} if collection
 		rmk_vars['out'] = @outfiles.map {|file| file.vpath || file.path}.join ' '
 		rmk_vars['out_noext'] = rmk_vars['out'][/^(.*)\..*$/, 1] if @outfiles.size == 1
-		rule.vars.each {|name, str| @vars[name] = str}	# interpolate rule's vars to self
+		rule.apply_to @vars	# interpolate rule's vars to self
 		@vars.split_str(implicit_output).each &regout if implicit_output
 		rmk_vars.freeze
 	end
