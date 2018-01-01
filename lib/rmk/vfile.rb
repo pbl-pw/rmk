@@ -16,6 +16,7 @@ class Rmk::VFile
 	def order_ref_builds; @order_ref_builds end
 
 	# build which include this file as output file
+	# @return [Rmk::Build]
 	attr_accessor :output_ref_build
 
 	# create VFile
@@ -27,6 +28,10 @@ class Rmk::VFile
 		@input_ref_builds, @order_ref_builds = [], []
 		@output_ref_build = nil unless is_src
 	end
+
+	# get or set out file state
+	# return [:eixst, :create, true, nil]
+	attr_accessor :state
 
 	# generate file's modified id from current disk content
 	def generate_modified_id; Rmk::VFile.generate_modified_id @path end
@@ -67,6 +72,11 @@ class Rmk::VFile
 		return updated! false if lmid == cmid
 		store_modified_id cmid
 		updated! true
+	end
+
+	# check outdated or not as srcfile at parse phaze(not build phaze)
+	def check_for_parse
+		load_modified_id != generate_modified_id
 	end
 end
 

@@ -146,8 +146,9 @@ class Rmk
 	# @return [self]
 	def parse
 		puts 'Rmk: parse start'
-		@virtual_root.parse
+		@mid_storage.wait_ready
 		@dep_storage.wait_ready
+		@virtual_root.parse
 		@dep_storage.data!.each do |path, fns|
 			next warn "Rmk: warn: outfile '#{path}' not found when restore depfile" unless @outfiles.include? path
 			build = @outfiles[path].output_ref_build
@@ -162,7 +163,6 @@ class Rmk
 
 	def build(*tgts)
 		puts 'Rmk: build start'
-		@mid_storage.wait_ready
 		if tgts.empty?
 			files = @defaultfiles
 		else

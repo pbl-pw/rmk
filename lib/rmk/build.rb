@@ -81,6 +81,7 @@ class Rmk::Build
 
 	def input_updated!(modified, order:false)
 		Rmk::Schedule.new_thread! &method(:run) if @mutex.synchronize do
+			next @runed = :checkskip if @runed == :force
 			next if @runed
 			@updatedcnt += 1
 			@input_modified ||= order ? modified == :create : modified
@@ -102,13 +103,41 @@ class Rmk::Build
 		end
 	end
 
-	private def run
+	def parser_force_run!
+		return if @runed
+		@runed = :force
 		exec = nil
-		modifieds = @outfiles.map{|file| File.exist?(file.path) ? true : (exec = :create)}
-		return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
+		@outfiles.each{|file| file.state = File.exist?(file.path) ? :exist : (exec = :create)}
+		unless exec
+			exec = @infiles.any? do |file|
+				next file.check_for_parse if file.src?
+				state = file.state
+				raise 'output file not updated when ref as config file build input' unless state
+				state != :exist
+			end
+			return unless @orderfiles.any? do |file|
+				next if file.src?
+				state = file.state
+				raise 'output file not updated when ref as config file build input' unless state
+				state == :create
+			end unless exec
+		end
 		raw_exec
-		@outfiles.size.times {|i| @outfiles[i].updated! modifieds[i]}
-		process_depfile
+		@outfiles.each{|file| file.state = :update if file.state == :exist}
+	end
+
+	private def run
+		if @runed == :checkskip
+			@outfiles.each {|file| file.updated! file.state != :exist && file.state}
+			process_depfile unless @outfiles[0].state == :exist
+		else
+			exec = nil
+			@outfiles.each{|file| file.state = File.exist?(file.path) ? :update : (exec = :create)}
+			return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
+			raw_exec
+			@outfiles.each {|file| file.updated! file.state}
+			process_depfile
+		end
 	end
 
 	private def raw_exec
