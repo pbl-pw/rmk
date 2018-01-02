@@ -450,18 +450,7 @@ class Rmk::VDir
 							next parse_file file if File.exist? file
 							raise "file '#{parm}' not exist" if force
 						else
-							files.each do |file|
-								build = file.output_ref_build
-								@rmk.dep_storage.sync do |data|
-									list = data.delete file.path
-									next unless list
-									list.each do |fn|
-										ifs = @rmk.virtual_root.find_inputfiles fn
-										ifs.each{|f| f.input_ref_builds << build; build.infiles << f}
-									end
-								end
-								build.parser_force_run!
-							end
+							files.each{|file| file.output_ref_build.parser_force_run!}
 							files.each{|file| parse_file file.vpath}
 						end
 					end

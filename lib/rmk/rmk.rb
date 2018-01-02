@@ -149,14 +149,6 @@ class Rmk
 		@mid_storage.wait_ready
 		@dep_storage.wait_ready
 		@virtual_root.parse
-		@dep_storage.data!.each do |path, fns|
-			next warn "Rmk: warn: outfile '#{path}' not found when restore depfile" unless @outfiles.include? path
-			build = @outfiles[path].output_ref_build
-			fns.each do |fn|
-				files = @virtual_root.find_inputfiles fn
-				files.each{|file| file.input_ref_builds << build; build.infiles << file}
-			end
-		end
 		puts 'Rmk: parse done'
 		self
 	end

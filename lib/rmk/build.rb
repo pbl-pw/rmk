@@ -77,6 +77,10 @@ class Rmk::Build
 		rule.apply_to @vars	# interpolate rule's vars to self
 		@vars.split_str(implicit_output).each &regout if implicit_output
 		rmk_vars.freeze
+		@outfiles.each do |file|
+			next unless (fns = @dir.rmk.dep_storage.data![file.path])
+			fns.each {|fn| @dir.rmk.find_inputfiles(fn).each {|f| f.input_ref_builds << self; @infiles << f}}
+		end
 	end
 
 	def input_updated!(modified, order:false)
