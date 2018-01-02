@@ -73,13 +73,13 @@ class Rmk
 				end
 			end
 		else
-			files << @files_mutex.synchronize do
-				next ffile ? FFile.new(@outfiles[path]) : @outfiles[path] if @outfiles.include? path
-				next ffile ? FFile.new(@srcfiles[path]) : @srcfiles[path] if @srcfiles.include? path
+			@files_mutex.synchronize do
+				next files << (ffile ? FFile.new(@outfiles[path]) : @outfiles[path]) if @outfiles.include? path
+				next files << (ffile ? FFile.new(@srcfiles[path]) : @srcfiles[path]) if @srcfiles.include? path
 				next unless File.exist? path
 				file = @srcfiles[path] = VFile.new rmk:self, path:path, is_src:true,
 						vpath:path.start_with?(@srcroot) && path[@srcroot.size .. -1]
-				ffile ? FFile.new(file) : file
+				files << (ffile ? FFile.new(file) : file)
 			end
 		end
 		files
