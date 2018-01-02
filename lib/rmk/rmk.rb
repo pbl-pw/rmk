@@ -25,7 +25,7 @@ class Rmk
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
 		@mid_storage = Rmk::Storage.new '.rmk/mid', {}
 		@dep_storage = Rmk::Storage.new '.rmk/dep', {}
-		@cml_storage = Rmk::Storage.new '.rmk/rml', {}	# command line text storage
+		@cml_storage = Rmk::Storage.new '.rmk/cml', {}	# command line text storage
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -174,6 +174,7 @@ class Rmk
 			checkproc = proc do |fi|
 				next checklist << fi if fi.src?
 				fi.output_ref_build.infiles.each &checkproc
+				fi.output_ref_build.depfiles.each &checkproc
 				fi.output_ref_build.orderfiles.each &checkproc
 			end
 			files.each &checkproc

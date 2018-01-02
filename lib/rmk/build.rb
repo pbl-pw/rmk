@@ -2,10 +2,11 @@ require_relative 'rmk'
 require_relative 'vdir'
 require_relative 'vfile'
 require 'open3'
+require 'digest'
 
 class Rmk::Build
 	attr_reader :dir, :vars
-	attr_reader :infiles, :orderfiles, :outfiles
+	attr_reader :infiles, :depfiles, :orderfiles, :outfiles
 
 	# create Build
 	# @param dir [Rmk::VDir] build's dir
@@ -77,9 +78,10 @@ class Rmk::Build
 		rule.apply_to @vars	# interpolate rule's vars to self
 		@vars.split_str(implicit_output).each &regout if implicit_output
 		rmk_vars.freeze
+		@depfiles = []
 		@outfiles.each do |file|
 			next unless (fns = @dir.rmk.dep_storage.data![file.path])
-			fns.each {|fn| @dir.rmk.find_inputfiles(fn).each {|f| f.input_ref_builds << self; @infiles << f}}
+			fns.each {|fn| @dir.rmk.find_inputfiles(fn).each {|f| f.input_ref_builds << self; @depfiles << f}}
 		end
 	end
 
@@ -89,13 +91,38 @@ class Rmk::Build
 			next if @runed
 			@updatedcnt += 1
 			@input_modified ||= order ? modified == :create : modified
-			needrun = @updatedcnt >= @infiles.size + @orderfiles.size
+			needrun = @updatedcnt >= @infiles.size + @depfiles.size + @orderfiles.size
 			@runed = true if needrun
 			needrun
 		end
 	end
 
 	def order_updated!(modified) input_updated! modified, order:true end
+
+	private def get_command
+		cmd = @vars.interpolate_str @vars['command'] || @command
+		digest = Digest::SHA1.new
+		digest << cmd
+		fdproc = proc{|f| digest << f.vpath || f.path}
+		@infiles.each &fdproc
+		@orderfiles.each &fdproc
+		@depfiles.each {|f| digest << f.path}
+		digest = digest.hexdigest
+		storage = @dir.rmk.cml_storage
+		[cmd, storage.data![@outfiles[0].path] != digest]
+	end
+
+	private def save_digest(fns)
+		digest = Digest::SHA1.new
+		digest << @command
+		fdproc = proc{|f| digest << f.vpath || f.path}
+		@infiles.each &fdproc
+		@orderfiles.each &fdproc
+		fns.each {|f| digest << f} if fns
+		digest = digest.hexdigest
+		storage = @dir.rmk.cml_storage
+		storage.sync{|data| data[@outfiles[0].path] = digest}
+	end
 
 	@output_mutex = Thread::Mutex.new
 	def self.puts(*parms) @output_mutex.synchronize{$stdout.puts *parms} end
@@ -112,17 +139,16 @@ class Rmk::Build
 		@runed = :force
 		exec = nil
 		@outfiles.each{|file| file.state = File.exist?(file.path) ? :exist : (exec = :create)}
-		cmd = @vars.interpolate_str @vars['command'] || @command
-		storage = @dir.rmk.cml_storage
-		if storage.data![@outfiles[0].path] != cmd
-			storage.sync{|data| data[@outfiles[0].path] = cmd}
-		elsif !exec
-			exec = @infiles.any? do |file|
+		@command, changed = get_command
+		unless changed || exec
+			inproc = proc do |file|
 				next file.check_for_parse if file.src?
 				state = file.state
 				raise 'output file not updated when ref as config file build input' unless state
 				state != :exist
 			end
+			exec = @infiles.any? &inproc
+			exec ||= @depfiles.any? &inproc
 			return unless @orderfiles.any? do |file|
 				next if file.src?
 				state = file.state
@@ -130,27 +156,22 @@ class Rmk::Build
 				state == :create
 			end unless exec
 		end
-		raw_exec cmd
+		raise 'config file build fail' unless raw_exec @command
 		@outfiles.each{|file| file.state = :update if file.state == :exist}
 	end
 
 	private def run
 		if @runed == :checkskip
 			@outfiles.each {|file| file.updated! file.state != :exist && file.state}
-			process_depfile unless @outfiles[0].state == :exist
+			save_digest process_depfile unless @outfiles[0].state == :exist
 		else
 			exec = nil
 			@outfiles.each{|file| file.state = File.exist?(file.path) ? :update : (exec = :create)}
-			cmd = @vars.interpolate_str @vars['command'] || @command
-			storage = @dir.rmk.cml_storage
-			if storage.data![@outfiles[0].path] != cmd
-				storage.sync{|data| data[@outfiles[0].path] = cmd}
-			else
-				return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
-			end
-			raw_exec cmd
+			@command, changed = get_command
+			return @outfiles.each{|file| file.updated! false} unless changed || @input_modified ||  exec
+			return unless raw_exec @command
 			@outfiles.each {|file| file.updated! file.state}
-			process_depfile
+			save_digest process_depfile
 		end
 	end
 
@@ -165,10 +186,12 @@ class Rmk::Build
 			if result.exitstatus != 0
 				err = "execute faild: '#{cmd}'" if err.empty?
 				Rmk::Build.log_cmd_out std, err
-				return @outfiles.each{|file| File.delete file.path if File.exist? file.path}
+				@outfiles.each{|file| File.delete file.path if File.exist? file.path}
+				return false
 			end
 			Rmk::Build.log_cmd_out std, err
 		end
+		true
 	end
 
 	private def process_depfile
@@ -186,6 +209,7 @@ class Rmk::Build
 				next if @dir.rmk.srcfiles.include?(file) || @dir.rmk.outfiles.include?(file)
 				@dir.rmk.mid_storage.sync{|data| data[file] ||= Rmk::VFile.generate_modified_id(file)}
 			end
+			files
 		else
 			Rmk::Build.err_puts "Rmk: depend type '#{@vars['deptype']}' not support"
 		end
