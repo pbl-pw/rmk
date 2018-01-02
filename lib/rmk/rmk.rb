@@ -25,7 +25,7 @@ class Rmk
 		Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
 		@mid_storage = Rmk::Storage.new '.rmk/mid', {}
 		@dep_storage = Rmk::Storage.new '.rmk/dep', {}
-		@src_list_storage = Rmk::Storage.new '.rmk/src', {}
+		@cml_storage = Rmk::Storage.new '.rmk/rml', {}	# command line text storage
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
@@ -33,7 +33,7 @@ class Rmk
 		@virtual_root = Rmk::VDir.new self, nil
 	end
 	attr_reader :srcroot, :outroot, :vars, :virtual_root, :srcfiles, :outfiles
-	attr_reader :mid_storage, :dep_storage, :src_list_storage
+	attr_reader :mid_storage, :dep_storage, :cml_storage
 
 	def join_abs_src_path(path) File.join @srcroot, path end
 
@@ -148,6 +148,7 @@ class Rmk
 		puts 'Rmk: parse start'
 		@mid_storage.wait_ready
 		@dep_storage.wait_ready
+		@cml_storage.wait_ready
 		@virtual_root.parse
 		puts 'Rmk: parse done'
 		self
@@ -164,21 +165,6 @@ class Rmk
 				raise "build target '#{name}' not found" unless file
 				file = file.input_ref_builds[0].outfiles[0] if file.src? && file.input_ref_builds.size == 1
 				file
-			end
-		end
-		@src_list_storage.wait_ready
-		@src_list_storage.data!.each do |src, outs|
-			next if @srcfiles.include? src
-			outs.each{|file| File.delete file rescue nil}
-		end
-		@src_list_storage.data!.clear
-		Rmk::Schedule.new_thread! do
-			@srcfiles.each_value do |src|
-				outs = []
-				action = proc{|build| build.outfiles.each{|out| outs << (out.vpath || out.path)}}
-				src.input_ref_builds.each &action
-				src.order_ref_builds.each &action
-				@src_list_storage[src.path] = outs
 			end
 		end
 		if files.empty?
@@ -199,11 +185,11 @@ class Rmk
 			thr.join unless thr == Thread.current
 		end
 		puts 'Rmk: build end'
-		@mid_storage.data!.each_key {|key| @mid_storage.data!.delete key unless @src_list_storage.data!.include? key}
 		@mid_storage.save
 		@dep_storage.data!.each_key {|key| @dep_storage.data!.delete key unless @outfiles.include? key}
 		@dep_storage.save
-		@src_list_storage.save
+		@cml_storage.data!.each_key {|key| @cml_storage.data!.delete key unless @outfiles.include? key}
+		@cml_storage.save
 	end
 
 	class VFile; end

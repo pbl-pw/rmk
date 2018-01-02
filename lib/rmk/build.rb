@@ -112,7 +112,11 @@ class Rmk::Build
 		@runed = :force
 		exec = nil
 		@outfiles.each{|file| file.state = File.exist?(file.path) ? :exist : (exec = :create)}
-		unless exec
+		cmd = @vars.interpolate_str @vars['command'] || @command
+		storage = @dir.rmk.cml_storage
+		if storage.data![@outfiles[0].path] != cmd
+			storage.sync{|data| data[@outfiles[0].path] = cmd}
+		elsif !exec
 			exec = @infiles.any? do |file|
 				next file.check_for_parse if file.src?
 				state = file.state
@@ -126,7 +130,7 @@ class Rmk::Build
 				state == :create
 			end unless exec
 		end
-		raw_exec
+		raw_exec cmd
 		@outfiles.each{|file| file.state = :update if file.state == :exist}
 	end
 
@@ -137,16 +141,21 @@ class Rmk::Build
 		else
 			exec = nil
 			@outfiles.each{|file| file.state = File.exist?(file.path) ? :update : (exec = :create)}
-			return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
-			raw_exec
+			cmd = @vars.interpolate_str @vars['command'] || @command
+			storage = @dir.rmk.cml_storage
+			if storage.data![@outfiles[0].path] != cmd
+				storage.sync{|data| data[@outfiles[0].path] = cmd}
+			else
+				return @outfiles.each{|file| file.updated! false} unless @input_modified ||  exec
+			end
+			raw_exec cmd
 			@outfiles.each {|file| file.updated! file.state}
 			process_depfile
 		end
 	end
 
-	private def raw_exec
+	private def raw_exec(cmd)
 		@vars['depfile'] ||= (@outfiles[0].vpath || @outfiles[0].path) + '.dep' if @vars['deptype']
-		cmd = @vars.interpolate_str @vars['command'] || @command
 		unless /^\s*$/.match? cmd
 			env = {}
 			env['PATH'] = @vars['PATH_prepend'] + ENV['PATH'] if @vars['PATH_prepend']
@@ -175,8 +184,6 @@ class Rmk::Build
 			files.each do |file|
 				file = File.absolute_path Rmk.normalize_path(file), @dir.rmk.outroot
 				next if @dir.rmk.srcfiles.include?(file) || @dir.rmk.outfiles.include?(file)
-				outs = @outfiles.map{|out| out.vpath || out.path}
-				@dir.rmk.src_list_storage.sync{|data| data[file] ? data[file].concat(outs) : data[file] = outs}
 				@dir.rmk.mid_storage.sync{|data| data[file] ||= Rmk::VFile.generate_modified_id(file)}
 			end
 		else
