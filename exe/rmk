@@ -44,54 +44,48 @@ targets = parser.parse(ARGV)
 Dir.chdir options[:prjroot] if options[:prjroot]
 options_file = '.rmk/options'
 loaded_options = File.exist?(options_file) ? Marshal.load(IO.binread options_file) : {}
-changed = false
-%i(outroot srcroot link name).each do |key|
-	next changed = true if cache_options.include? key
-	next cache_options[key] = loaded_options[key] if loaded_options[key]
-	changed = true
-end
-cache_options[:outroot] ||= '_Build'
-cache_options[:srcroot] ||= '..'
-cache_options[:name] ||= File.basename Dir.pwd
-cache_options[:link] ||= File.join ENV['TMP'], cache_options[:name]
-if changed
+if cache_options.empty?
+	cache_options = loaded_options
+elsif cache_options.any?{|k, v| v != loaded_options[k]}
 	Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
 	IO.binwrite options_file, Marshal.dump(cache_options)
 end
-dir, link = cache_options[:outroot], cache_options[:link]
+srcroot = cache_options[:srcroot] || '..'
+outroot = cache_options[:outroot] || '_Build'
+link = cache_options[:link] || File.join(ENV['TMP'], cache_options[:name] || File.basename(Dir.pwd))
 if link && link != '/'
 	require 'fileutils'
 	link = link.gsub(/\$(?:(\$)|{(.*?)})/){$1 || ENV[$2]}.gsub! ?\\, ?\/
 	FileUtils.mkpath link unless Dir.exist? link
-	if File.symlink? dir
-		if File.readlink(dir) != link
-			Dir.rmdir dir
-			File.symlink link, dir
+	if File.symlink? outroot
+		if File.readlink(outroot) != link
+			Dir.rmdir outroot
+			File.symlink link, outroot
 		end
-	elsif Dir.exist?(dir) || File.exist?(dir)
-		raise "need symlink '#{dir}' as outroot, but file(or dir) '#{dir}' already exist"
+	elsif Dir.exist?(outroot) || File.exist?(outroot)
+		raise "need symlink '#{outroot}' as outroot, but file(or dir) '#{outroot}' already exist"
 	else
-		FileUtils.mkpath File.dirname dir
-		File.symlink link, dir
+		FileUtils.mkpath File.dirname outroot
+		File.symlink link, outroot
 	end
 else
-	FileUtils.mkpath dir
+	FileUtils.mkpath outroot
 end
 variants = options[:variants]
-if variants && variants.size != 1
-	targets = targets.map{|tgt| %|"#{tgt}"|}.join ' '
-	exe = File.join RbConfig::CONFIG['bindir'], RbConfig::CONFIG['ruby_install_name']
-	thrs = []
-	variants.each {|name| thrs << Thread.new {system %|"#{exe}" "#{__FILE__}" -V #{name} #{targets}|}}
-	thrs.each{|thr| thr.join}
-	exit
-end
 if variants
-	variants = variants[0]
-	src = cache_options[:srcroot].match?(/^[a-z]:\//i) ? cache_options[:srcroot] : File.join('..', cache_options[:srcroot])
-	rmk = Rmk.new srcroot:src, outroot:File.join(cache_options[:outroot], variants), variant:variants
-else
-	rmk = Rmk.new srcroot:cache_options[:srcroot], outroot:cache_options[:outroot]
+	if variants.size == 1
+		variants = variants[0]
+		outroot = File.join outroot, variants
+		srcroot = File.join '..', srcroot unless srcroot.match?(/^[a-z]:\//i)
+	else
+		targets = targets.map{|tgt| %|"#{tgt}"|}.join ' '
+		exe = File.join RbConfig::CONFIG['bindir'], RbConfig::CONFIG['ruby_install_name']
+		thrs = []
+		variants.each {|name| thrs << Thread.new {system %|"#{exe}" "#{__FILE__}" -V #{name} #{targets}|}}
+		thrs.each{|thr| thr.join}
+		exit
+	end
 end
+rmk = Rmk.new srcroot:srcroot, outroot:outroot, variant:variants
 rmk.parse
 rmk.build *targets
