@@ -13,7 +13,7 @@ class Rmk
 		stream.print @log_prefix, mark
 		return stream.puts *parms unless parms.size > 1
 		stream.puts ''
-		parms.each{|parm| stream.print ?\t, parm, ?\n}
+		parms.each{|parm| stream.print ?\t; stream.puts parm}
 		nil
 	end
 
@@ -22,14 +22,14 @@ class Rmk
 	def err_puts(mark, *parms) @stdoe_mutex.synchronize{log $stderr, mark, *parms} end
 
 	private def split_log(stream, mark, lines)
-		stream.print @log_prefix, mark
-		lines.each_line{|line| stream.print ?\t, line, ?\n}
+		begin stream.print @log_prefix; stream.puts mark end if mark
+		lines.each_line{|line| stream.print ?\t; stream.puts line}
 	end
 
 	def log_cmd_out(mark, out, err)
 		@stdoe_mutex.synchronize do
-			split_log $stdout, mark, out unless out.empty?
-			split_log $stderr, mark, err unless err.empty?
+			split_log $stdout, mark, out
+			split_log $stderr, nil, err unless err.empty?
 		end
 	end
 
