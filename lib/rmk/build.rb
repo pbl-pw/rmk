@@ -124,16 +124,6 @@ class Rmk::Build
 		storage.sync{|data| data[@outfiles[0].path] = digest}
 	end
 
-	@output_mutex = Thread::Mutex.new
-	def self.puts(*parms) @output_mutex.synchronize{$stdout.puts *parms} end
-	def self.err_puts(*parms) @output_mutex.synchronize{$stderr.puts *parms} end
-	def self.log_cmd_out(out, err)
-		@output_mutex.synchronize do
-			$stdout.puts out unless out.empty?
-			$stderr.puts err unless err.empty?
-		end
-	end
-
 	def parser_force_run!
 		return if @runed
 		@runed = :force
@@ -182,14 +172,14 @@ class Rmk::Build
 			env['PATH'] = @vars['PATH_prepend'] + ENV['PATH'] if @vars['PATH_prepend']
 			@vars['ENV_export'].split(/\s+/).each{|name| env[name] = @vars[name] if @vars.include? name} if @vars['ENV_export']
 			std, err, result = env.empty? ? Open3.capture3(cmd) : Open3.capture3(env, cmd)
-			std = std.empty? ? @vars['echo'] || "Rmk: run: #{cmd}" : (@vars['echo'] || "Rmk: run: #{cmd}") + ?\n + std
+			std = std.empty? ? @vars['echo'] || cmd : @vars['echo'] || cmd + ?\n + std
 			if result.exitstatus != 0
 				err = "execute faild: '#{cmd}'" if err.empty?
-				Rmk::Build.log_cmd_out std, err
+				@dir.rmk.log_cmd_out 'exec: ', std, err
 				@outfiles.each{|file| File.delete file.path if File.exist? file.path}
 				return false
 			end
-			Rmk::Build.log_cmd_out std, err
+			@dir.rmk.log_cmd_out 'exec: ', std, err
 		end
 		true
 	end
@@ -197,12 +187,12 @@ class Rmk::Build
 	private def process_depfile
 		return unless @vars['deptype']
 		unless File.exist? @vars['depfile']
-			Rmk::Build.err_puts "Rmk: depend file '#{@vars['depfile']}' which must be created by build '#{@vars['out']}' not found"
+			@dir.rmk.err_puts 'error: ', "depend file '#{@vars['depfile']}' which must be created by build '#{@vars['out']}' not found"
 		end
 		if @vars['deptype'] == 'make'
 			files = parse_make_depfile @vars['depfile']
 			File.delete @vars['depfile']
-			return Rmk::Build.err_puts "Rmk: syntax of depend file '#{@vars['depfile']}' not support yet" unless files
+			return @dir.rmk.err_puts 'error: ' "syntax of depend file '#{@vars['depfile']}' not support yet" unless files
 			@dir.rmk.dep_storage[@outfiles[0].path] = files
 			files.each do |file|
 				file = File.absolute_path Rmk.normalize_path(file), @dir.rmk.outroot
@@ -211,7 +201,7 @@ class Rmk::Build
 			end
 			files
 		else
-			Rmk::Build.err_puts "Rmk: depend type '#{@vars['deptype']}' not support"
+			@dir.rmk.err_puts 'warn: ', "depend type '#{@vars['deptype']}' not support"
 		end
 	end
 

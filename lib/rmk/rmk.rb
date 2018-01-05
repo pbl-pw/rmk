@@ -8,11 +8,37 @@ class Rmk
 	# @return [String]
 	def self.normalize_path(path) path.gsub(?\\, ?/).sub(/^[a-z](?=:)/){|ch|ch.upcase} end
 
+	private def log(stream, mark, *parms)
+		return stream.puts *parms unless mark
+		stream.print @log_prefix, mark
+		return stream.puts *parms unless parms.size > 1
+		stream.puts ''
+		parms.each{|parm| stream.print ?\t, parm, ?\n}
+		nil
+	end
+
+	def std_puts(mark, *parms) @stdoe_mutex.synchronize{log $stdout, mark, *parms} end
+
+	def err_puts(mark, *parms) @stdoe_mutex.synchronize{log $stderr, mark, *parms} end
+
+	private def split_log(stream, mark, lines)
+		stream.print @log_prefix, mark
+		lines.each_line{|line| stream.print ?\t, line, ?\n}
+	end
+
+	def log_cmd_out(mark, out, err)
+		@stdoe_mutex.synchronize do
+			split_log $stdout, mark, out unless out.empty?
+			split_log $stderr, mark, err unless err.empty?
+		end
+	end
+
 	# create Rmk object
 	# @param srcroot [String] source root dir,can be absolute or relative to output root(start with ..)
 	# @param outroot [String] output root dir,can be absolute or relative to pwd,default pwd
-	def initialize(srcroot:'', outroot:'')
+	def initialize(srcroot:'', outroot:'', variant:nil)
 		@files_mutex = Thread::Mutex.new	# files operate mutex
+		@stdoe_mutex = Thread::Mutex.new	# stdout and stderr mutex
 
 		srcroot = Rmk.normalize_path srcroot
 		@outroot = File.join Rmk.normalize_path(File.absolute_path outroot), ''
@@ -29,7 +55,10 @@ class Rmk
 		@srcfiles = {}
 		@outfiles = {}
 		@defaultfiles = []
-		@vars = {'srcroot'=>@srcroot[0..-2], 'outroot'=>@outroot[0..-2], 'src_rto_root'=>(@src_relative || @srcroot)[0..-2]}.freeze
+		@vars = {'srcroot'=>@srcroot[0..-2], 'outroot'=>@outroot[0..-2], 'src_rto_root'=>(@src_relative || @srcroot)[0..-2]}
+		@vars['variant'] = variant if variant
+		@vars.freeze
+		@log_prefix = variant ? "Rmk (#{variant}): " : 'Rmk: '
 		@virtual_root = Rmk::VDir.new self, nil
 	end
 	attr_reader :srcroot, :outroot, :vars, :virtual_root, :srcfiles, :outfiles
@@ -145,17 +174,17 @@ class Rmk
 	# parse project
 	# @return [self]
 	def parse
-		puts 'Rmk: parse start'
+		std_puts 'parse start'
 		@mid_storage.wait_ready
 		@dep_storage.wait_ready
 		@cml_storage.wait_ready
 		@virtual_root.parse
-		puts 'Rmk: parse done'
+		std_puts 'parse done'
 		self
 	end
 
 	def build(*tgts)
-		puts 'Rmk: build start'
+		std_puts 'build start'
 		if tgts.empty?
 			files = @defaultfiles
 		else
@@ -178,14 +207,14 @@ class Rmk
 				fi.output_ref_build.orderfiles.each &checkproc
 			end
 			files.each &checkproc
-			exit puts('found nothing to build') || 0 if checklist.empty?
+			exit std_puts('','found nothing to build') || 0 if checklist.empty?
 			checklist.each {|file| file.check_for_build}
 		end
 		while Thread.list.size > 1
 			thr = Thread.list[-1]
 			thr.join unless thr == Thread.current
 		end
-		puts 'Rmk: build end'
+		std_puts 'build end'
 		@mid_storage.save
 		@dep_storage.data!.each_key {|key| @dep_storage.data!.delete key unless @outfiles.include? key}
 		@dep_storage.save

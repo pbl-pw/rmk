@@ -110,7 +110,7 @@ end
 if variants
 	variants = variants[0]
 	src = cache_options[:srcroot].match?(/^[a-z]:\//i) ? cache_options[:srcroot] : File.join('..', cache_options[:srcroot])
-	rmk = Rmk.new srcroot:src, outroot:File.join(cache_options[:outroot], variants)
+	rmk = Rmk.new srcroot:src, outroot:File.join(cache_options[:outroot], variants), variant:variants
 else
 	rmk = Rmk.new srcroot:cache_options[:srcroot], outroot:cache_options[:outroot]
 end

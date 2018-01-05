@@ -490,8 +490,8 @@ class Rmk::VDir
 			state = begin_define_nonvar indent
 			parms = line.match /^((error)|warn|(info))\s+(.*)$/
 			raise 'syntax error' unless parms
-			line = "Rmk: #{parms[1]}: " + state[:vars].interpolate_str(parms[4])
-			parms[3] ? puts(line) : $stderr.puts(line)
+			line = state[:vars].interpolate_str(parms[4])
+			parms[3] ? @rmk.std_puts(parms[1] + ': ', line) : @rmk.err_puts(parms[1] + ': ', line)
 			exit 2 if parms[2]
 		else
 			match = /^(?:(?<append>\+=)|=)(?(<append>)|\s*)(?<value>.*)$/.match line
