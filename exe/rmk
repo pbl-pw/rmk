@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 
 require 'optparse'
-require 'iniparse'
 require "rmk"
 
 options = {}
@@ -27,8 +26,8 @@ parser = OptionParser.new{ |opts|
 	opts.on '--name=name', "repository name, default repository root dir's name" do |name| cache_options[:name] = name end
 
 	opts.separator 'variant options:'
-	opts.on '-V', '--variant [x,y,z]', Array, 'variant list to build, empty for all variants' do |list|
-		options[:variants] = list || []
+	opts.on '-V', '--variant x,y,z', Array, 'variant list to build' do |list|
+		options[:variants] = list
 	end
 
 	opts.separator 'info options:'
@@ -80,32 +79,12 @@ else
 end
 variants = options[:variants]
 if variants && variants.size != 1
-	if File.exist? 'variants.rmk'
-		inifile = IniParse.open 'variants.rmk'
-		targets = targets.map{|tgt| %|"#{tgt}"|}.join ' '
-		exe = File.join RbConfig::CONFIG['bindir'], RbConfig::CONFIG['ruby_install_name']
-		thrs = []
-		if variants.empty?
-			inifile.each do |vat|
-				thrs << Thread.new {system %|"#{exe}" "#{__FILE__}" -V #{vat.key} #{targets}|}
-			end
-		else
-			variants.each do |name|
-				thrs << Thread.new {system %|"#{exe}" "#{__FILE__}" -V #{name} #{targets}|} if inifile.has_section? name
-			end
-		end
-		thrs.each{|thr| thr.join}
-		exit
-	elsif variants.empty?
-		raise "no found 'variants.rmk' file for build all variants"
-	else
-		targets = targets.map{|tgt| %|"#{tgt}"|}.join ' '
-		exe = File.join RbConfig::CONFIG['bindir'], RbConfig::CONFIG['ruby_install_name']
-		thrs = []
-		variants.each {|name| thrs << Thread.new {system %|"#{exe}" "#{__FILE__}" -V #{name} #{targets}|}}
-		thrs.each{|thr| thr.join}
-		exit
-	end
+	targets = targets.map{|tgt| %|"#{tgt}"|}.join ' '
+	exe = File.join RbConfig::CONFIG['bindir'], RbConfig::CONFIG['ruby_install_name']
+	thrs = []
+	variants.each {|name| thrs << Thread.new {system %|"#{exe}" "#{__FILE__}" -V #{name} #{targets}|}}
+	thrs.each{|thr| thr.join}
+	exit
 end
 if variants
 	variants = variants[0]
