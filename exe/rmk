@@ -21,7 +21,7 @@ parser = OptionParser.new{ |opts|
 	opts.on '-S', '--srcdir=dir', 'source root dir, can be absolute or relative to output root(start with ..), default ..' do |dir|
 		cache_options[:srcroot] = dir
 	end
-	opts.on '--link-outdir=dir', 'symbol link outdir to this dir, default <system temp dir>/<repository name>' do |dir|
+	opts.on '--link-outdir=dir', 'symbol link outdir to this dir, default <system temp dir>/<repository name>, set / to disable' do |dir|
 		cache_options[:link] = dir
 	end
 	opts.on '--name=name', "repository name, default repository root dir's name" do |name| cache_options[:name] = name end
@@ -60,7 +60,7 @@ if changed
 	IO.binwrite options_file, Marshal.dump(cache_options)
 end
 dir, link = cache_options[:outroot], cache_options[:link]
-if link
+if link && link != '/'
 	require 'fileutils'
 	link = link.gsub(/\$(?:(\$)|{(.*?)})/){$1 || ENV[$2]}.gsub! ?\\, ?\/
 	FileUtils.mkpath link unless Dir.exist? link
