@@ -269,11 +269,9 @@ class Rmk::VDir
 	def parse
 		raise "dir '#{@abs_src_path}' has been parsed" if @state
 		@state = []
-		file = join_abs_src_path 'default.rmk'
+		file = join_abs_src_path 'template.rmk'
 		@defaultfile = file if ::File.exist? file
-		file = join_abs_out_path 'config.rmk'
-		parse_file file if ::File.exist? file
-		file = join_abs_src_path 'dir.rmk'
+		file = join_abs_src_path 'rmk.rmk'
 		if ::File.exist? file
 			parse_file file
 		elsif @defaultfile
@@ -285,6 +283,14 @@ class Rmk::VDir
 
 	def parse_file(file)
 		last_state, @state = @state, [{indent:0, type:nil, condition:nil, vars:@vars}]
+		Rmk::VDir.parse_file file, &method(:parse_line)
+		@state = last_state
+	rescue
+		$!.backtrace[-1] << (@virtual_path ? " in vpath '#{@virtual_path}'" : "in vpath '<root>'")
+		raise
+	end
+
+	def self.parse_file(file, &parse_line)
 		lines = IO.readlines file
 		markid = lid = 0
 		while lid < lines.size
@@ -296,16 +302,21 @@ class Rmk::VDir
 				lid += 1
 				lines[lid]&.lstrip!
 			end
-			parse_line lid < lines.size ? line + lines[lid] : line, markid
+			parse_line.call lid < lines.size ? line + lines[lid] : line
 			lid += 1
 		end
-		@state = last_state
 	rescue
-		$!.set_backtrace $!.backtrace.push "#{file}:#{markid + 1}:vpath'#{@virtual_path}'"
+		markid = "#{file}:#{markid + 1}:"
+		if $!.respond_to? :rmk_mark
+			$!.set_backtrace $!.backtrace.push markid
+		else
+			$!.define_singleton_method(:rmk_mark){}
+			$!.set_backtrace [markid]
+		end
 		raise
 	end
 
-	def parse_line(line, lid)
+	def parse_line(line)
 		match = /^(?<indent> *|\t*)(?:(?<firstword>\w+)\s*(?<content>.+)?)?$/.match line
 		raise 'syntax error' unless match
 		indent, firstword, line = match[:indent].size, match[:firstword], match[:content]

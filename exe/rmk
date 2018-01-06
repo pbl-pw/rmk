@@ -23,11 +23,10 @@ parser = OptionParser.new{ |opts|
 	opts.on '--link-outdir=dir', 'symbol link outdir to this dir, default <system temp dir>/<repository name>, set / to disable' do |dir|
 		cache_options[:link] = dir
 	end
-	opts.on '--name=name', "repository name, default repository root dir's name" do |name| cache_options[:name] = name end
 
 	opts.separator 'variant options:'
-	opts.on '-V', '--variant x,y,z', Array, 'variant list to build' do |list|
-		options[:variants] = list
+	opts.on '-V', '--variant [x,y,z]', Array, 'variant list to build, empty for build all variants' do |list|
+		options[:variants] = list || []
 	end
 
 	opts.separator 'info options:'
@@ -50,9 +49,21 @@ elsif cache_options.any?{|k, v| v != loaded_options[k]}
 	Dir.mkdir '.rmk' unless Dir.exist? '.rmk'
 	IO.binwrite options_file, Marshal.dump(cache_options)
 end
-srcroot = cache_options[:srcroot] || '..'
-outroot = cache_options[:outroot] || '_Build'
-link = cache_options[:link] || File.join(ENV['TMP'], cache_options[:name] || File.basename(Dir.pwd))
+def default_options
+	return @options if @options
+	file = 'root.rmk'
+	@options = {}
+	return @options unless File.exist? file
+	Rmk::VDir.parse_file file do |line|
+		match = line.match /^(\w+)\s*=\s*(.*)$/
+		raise "syntax error, 'root.rmk' only support raw var define" unless match
+		@options[match[1].to_sym] = match[2].sub(/(?<!\$)(?:\$\$)*\K\s+$/,'').gsub(/\$([$\s])/){$1}
+	end
+	@options
+end
+srcroot = cache_options[:srcroot] || default_options[:srcroot] || '..'
+outroot = cache_options[:outroot] || default_options[:outroot] || '_Build'
+link = cache_options[:link] || File.join(ENV['TMP'], default_options[:name] || File.basename(Dir.pwd))
 if link && link != '/'
 	require 'fileutils'
 	link = link.gsub(/\$(?:(\$)|{(.*?)})/){$1 || ENV[$2]}.gsub! ?\\, ?\/
@@ -73,6 +84,8 @@ else
 end
 variants = options[:variants]
 if variants
+	variants = default_options[:variants]&.split /\s*,\s*/ if variants.empty?
+	raise "can't find variants list for build all variants" unless variants && !variants.empty?
 	if variants.size == 1
 		variants = variants[0]
 		outroot = File.join outroot, variants
