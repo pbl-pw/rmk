@@ -41,6 +41,7 @@ parser = OptionParser.new{ |opts|
 }
 targets = parser.parse(ARGV)
 Dir.chdir options[:prjroot] if options[:prjroot]
+clean = options.empty? && cache_options.empty? && targets[0] == 'clean'
 options_file = '.rmk/options'
 loaded_options = File.exist?(options_file) ? Marshal.load(IO.binread options_file) : {}
 if cache_options.empty?
@@ -64,6 +65,22 @@ end
 srcroot = cache_options[:srcroot] || default_options[:srcroot] || '..'
 outroot = cache_options[:outroot] || default_options[:outroot] || '_Build'
 link = cache_options[:link] || File.join(ENV['TMP'], default_options[:name] || File.basename(Dir.pwd))
+if clean
+	raise 'outdir not exist for clean' unless Dir.exist? outroot
+	if Dir.exist? File.join outroot, '.rmk'
+		dir = File.symlink?(outroot) ? File.readlink(outroot) : outroot
+		FileUtils.rmtree dir
+		puts "dir '#{dir}' rmoved"
+	else
+		Dir[File.join outroot, '*/'].each do |dir|
+			next unless Dir.exist? File.join dir, '.rmk'
+			FileUtils.rmtree dir
+			puts "dir '#{dir}' rmoved"
+		end
+	end
+	puts 'clean done'
+	exit
+end
 if link && link != '/'
 	require 'fileutils'
 	link = link.gsub(/\$(?:(\$)|{(.*?)})/){$1 || ENV[$2]}.gsub! ?\\, ?\/
