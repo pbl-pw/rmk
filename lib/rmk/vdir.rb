@@ -54,6 +54,7 @@ class Rmk::VDir
 		@vars.rmk['vpath'] = @virtual_path&.[](0 .. -2) || '.'
 		@vars.rmk['srcpath'] = @abs_src_path[0 .. -2]
 		@vars.rmk['outpath'] = @abs_out_path[0 .. -2]
+		@vars.merge! ENV.to_hash unless @parent
 	end
 
 	def vpath; @virtual_path end
