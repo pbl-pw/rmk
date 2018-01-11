@@ -433,17 +433,25 @@ class Rmk::VDir
 			raise dirmode ? "must have file name" : "must have dir name or matcher" if parms.empty?
 			if dirmode
 				threads = []
-				parms.each do |parm|
-					dirs = Dir[File.join @abs_src_path, parm, '']
-					if dirs.empty?
-						raise "subdir '#{parm}' doesn't exist" if force
-					else
+				if parms[0].start_with?('/') && parms[0].end_with?('/')
+					raise 'only support one matcher when use regex' if parms.size != 1
+					regex = Regexp.new parms[0][1..-2]
+					Dir['./*/', base:@abs_src_path].each do |dir|
+						dir.delete_prefix! '/'
+						next unless regex.match? dir
+						dir = include_subdir dir
+						threads << Rmk::Schedule.new_thread!( &dir.method(:parse) )
+					end
+				else
+					parms.each do |parm|
+						dirs = Dir[File.join('.', parm, ''), base:@abs_src_path]
 						dirs.each do |dir|
-							dir = include_subdir dir[@abs_src_path.size .. -2]
+							dir = include_subdir dir.delete_prefix '/'
 							threads << Rmk::Schedule.new_thread!( &dir.method(:parse) )
 						end
 					end
 				end
+				raise "not found any subdir" if force && threads.empty?
 				threads.each{|thr| thr.join}
 			else
 				parms.each do |parm|
