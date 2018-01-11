@@ -215,7 +215,7 @@ class Rmk::Build
 			parms = line.split /(?<!\\)(?:\\\\)*\K\s+/
 			unless parms.empty?
 				parms.delete_at 0 if parms[0].empty?
-				parms.map!{|parm| File.absolute_path parm.gsub(/\\(.)/, '\1')}
+				parms.map!{|parm| File.absolute_path parm}
 				files.concat parms
 			end
 			break unless joinline
