@@ -324,7 +324,15 @@ class Rmk::VDir
 		return end_last_define unless firstword
 		state = @state[-1]
 		if !state[:condition].nil? && !state[:condition]		# false state fast process
-			@state.pop if indent == state[:indent] && firstword == 'endif'
+			if indent == state[:indent]
+				if firstword == 'endif'
+					raise 'syntax error' if line
+					@state.pop
+				elsif firstword == 'else'
+					raise 'syntax error' if line
+					state[:condition] = true
+				end
+			end
 			return
 		end
 		case firstword
