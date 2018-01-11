@@ -28,8 +28,12 @@ class Rmk
 
 	def log_cmd_out(mark, out, err)
 		@stdoe_mutex.synchronize do
-			split_log $stdout, mark, out
-			split_log $stderr, nil, err unless err.empty?
+			if err.empty?
+				split_log $stdout, mark, out
+			else
+				split_log $stderr, mark, out
+				split_log $stderr, nil, err
+			end
 		end
 	end
 
